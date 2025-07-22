@@ -1,85 +1,335 @@
 import Buffer "mo:base/Buffer";
-import Int32 "mo:base/Int32";
-import Int64 "mo:base/Int64";
-import Nat8 "mo:base/Nat8";
-import Nat32 "mo:base/Nat32";
-import Nat64 "mo:base/Nat64";
-import Result "mo:base/Result";
-import Text "mo:base/Text";
-import Iter "mo:base/Iter";
-import Float "mo:base/Float";
-import Blob "mo:base/Blob";
+import Int "mo:base/Int";
+import Int32 "mo:new-base/Int32";
+import Int64 "mo:new-base/Int64";
+import Nat8 "mo:new-base/Nat8";
+import Nat32 "mo:new-base/Nat32";
+import Nat64 "mo:new-base/Nat64";
+import Result "mo:new-base/Result";
+import Text "mo:new-base/Text";
+import Iter "mo:new-base/Iter";
 import Types "./Types";
 import PeekableIter "mo:xtended-iter/PeekableIter";
 import LEB128 "mo:leb128";
+import Nat "mo:new-base/Nat";
+import List "mo:new-base/List";
+import Runtime "mo:new-base/Runtime";
+import Blob "mo:new-base/Blob";
+import IntX "mo:xtended-numbers/IntX";
+import NatX "mo:xtended-numbers/NatX";
+import Map "mo:new-base/Map";
 
-/// Protobuf (Protocol Buffers) decoder for Motoko.
-///
-/// This module provides functionality for decoding Protobuf binary data to Motoko values
-/// according to the Protocol Buffers wire format specification. The decoder handles
-/// variable-length integers, length-delimited values, and fixed-width values.
-///
-/// Key features:
-/// * Decode Protobuf binary data to Motoko values
-/// * Support for all wire types (varint, fixed32, fixed64, length-delimited)
-/// * Streaming decoding with iterator-based input
-/// * Varint decoding for integers
-/// * Zigzag decoding for signed integers
-/// * IEEE 754 decoding for floating-point numbers
-/// * Comprehensive error handling and validation
-///
-/// Example usage:
-/// ```motoko
-/// import Protobuf "mo:protobuf";
-/// import Result "mo:base/Result";
-///
-/// // Decode Protobuf bytes to a message
-/// let bytes: [Nat8] = [0x08, 0x96, 0x01, 0x12, 0x04, 0x74, 0x65, 0x73, 0x74];
-/// let result = Protobuf.decode(bytes.vals());
-/// switch (result) {
-///   case (#ok(message)) { /* Use decoded message */ };
-///   case (#err(error)) { /* Handle decoding error */ };
-/// };
-/// ```
-///
-/// Security considerations:
-/// * Protobuf data from untrusted sources should be validated
-/// * Be aware of potential memory usage with large messages
-/// * Consider limits on recursion depth for deeply nested structures
 module {
 
-    /// Decodes a series of bytes into a Protobuf message.
-    /// This is the main decoding function that converts Protobuf binary data to a structured message.
-    ///
-    /// The function accepts an iterator of bytes, which allows for efficient streaming
-    /// decoding of large data sets. The decoder handles all Protobuf wire types and validates
-    /// the input data according to the Protobuf specification.
-    ///
-    /// Parameters:
-    /// * `bytes`: An iterator over the Protobuf-encoded bytes to decode
-    ///
-    /// Returns:
-    /// * `#ok(Types.Message)`: Successfully decoded Protobuf message
-    /// * `#err(Types.DecodingError)`: Decoding failed with error details
-    ///
-    /// Example:
-    /// ```motoko
-    /// let bytes: [Nat8] = [0x08, 0x96, 0x01]; // field 1, varint 150
-    /// let message: Types.Message = switch(decode(bytes.vals())) {
-    ///     case (#err(e)) Debug.trap("Decoding failed: " # debug_show(e));
-    ///     case (#ok(m)) m;
-    /// };
-    /// ```
-    public func decode(bytes : Iter.Iter<Nat8>) : Result.Result<Types.Message, Types.DecodingError> {
-        let decoder = ProtobufDecoder(bytes);
+    public func fromBytes(bytes : Iter.Iter<Nat8>, schema : [Types.FieldType]) : Result.Result<[Types.Field], Text> {
+        let schemalessFields = switch (fromSchemalessBytes(bytes)) {
+            case (#err(e)) return #err(e);
+            case (#ok(fields)) fields;
+        };
+        type SingleValueOrRepeated = {
+            #single : Value;
+            #repeated : List.List<Value>;
+        };
+        let schemaMap = schema.vals()
+        |> Iter.map<Types.FieldType, (Nat, Types.ValueType)>(
+            _,
+            func(fieldType : Types.FieldType) : (Nat, Types.ValueType) {
+                (fieldType.fieldNumber, fieldType.valueType);
+            },
+        )
+        |> Map.fromIter<Nat, Types.ValueType>(_, Nat.compare);
+        let fieldMap = Map.empty<Nat, SingleValueOrRepeated>();
+        for (field in schemalessFields.vals()) {
+            let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema");
+            let value = switch (getValueWithType(field.wireType, field.value, fieldSchema)) {
+                case (#err(e)) return #err("Error decoding field " # Nat.toText(field.fieldNumber) # ": " # e);
+                case (#ok(v)) v;
+            };
+            switch (Map.get(fieldMap, Nat.compare, field.fieldNumber)) {
+                case (null) Map.add(fieldMap, Nat.compare, field.fieldNumber, #single(value));
+                case (?f) switch (f) {
+                    case (#single(existingValue)) {
+                        let repeatedList = List.empty<Value>();
+                        List.add(repeatedList, existingValue);
+                        List.add(repeatedList, value);
+                        Map.add(fieldMap, Nat.compare, field.fieldNumber, #repeated(repeatedList));
+                    };
+                    case (#repeated(existingValues)) List.add(existingValues, value);
+                };
+            };
+        };
+        let fields = Map.entries(fieldMap)
+        |> Iter.map(
+            _,
+            func((number, fieldStorage) : (Nat, SingleValueOrRepeated)) : Types.Field {
+                let value = switch (fieldStorage) {
+                    case (#single(value)) value;
+                    case (#repeated(fields)) #repeated(List.toArray(fields));
+                };
+                {
+                    fieldNumber = number;
+                    value = value;
+                };
+            },
+        )
+        |> Iter.toArray(_);
+        #ok(fields);
+    };
+
+    public func fromSchemalessBytes(bytes : Iter.Iter<Nat8>) : Result.Result<[Types.SchemalessField], Text> {
+        let decoder = SchemalessProtobufDecoder(bytes);
         decoder.decode();
     };
 
-    private class ProtobufDecoder(bytes : Iter.Iter<Nat8>) {
+    type VarintValue = {
+        #int32 : Int32;
+        #int64 : Int64;
+        #uint32 : Nat32;
+        #uint64 : Nat64;
+        #sint32 : Int32;
+        #sint64 : Int64;
+        #bool : Bool;
+        #enum : Int;
+    };
+
+    type Fixed32Value = {
+        #int32 : Int32;
+        #uint32 : Nat32;
+        #bool : Bool;
+        #enum : Int;
+    };
+
+    type Fixed64Value = {
+        #int64 : Int64;
+        #uint64 : Nat64;
+        #bool : Bool;
+        #enum : Int;
+    };
+
+    type LengthDelimitedValue = {
+        #string : Text;
+        #bytes : [Nat8];
+        #message : [Types.Field];
+        #mapEntry : (Value, Value);
+        #packedRepeated : [Value];
+    };
+
+    type Value = VarintValue or Fixed32Value or Fixed64Value or LengthDelimitedValue;
+
+    private func getValueWithType(
+        wireType : Types.WireType,
+        value : [Nat8],
+        valueType : Types.ValueType,
+    ) : Result.Result<Value, Text> {
+        switch (wireType) {
+            case (#varint) getVarintValue(value, valueType);
+            case (#fixed32) getFixed32Value(value, valueType);
+            case (#fixed64) getFixed64Value(value, valueType);
+            case (#lengthDelimited) getLengthDelimitedValue(value, valueType);
+        };
+    };
+
+    private func getVarintValue(
+        value : [Nat8],
+        valueType : Types.ValueType,
+    ) : Result.Result<VarintValue, Text> {
+        let trueValue : VarintValue = switch (valueType) {
+            case (#int32) {
+                let decoded = switch (LEB128.fromSignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                if (decoded > 0x7FFFFFFF or decoded < -0x80000000) {
+                    return #err("Varint exceeds Int32 range: " # Int.toText(decoded));
+                };
+                #int32(Int32.fromInt(decoded));
+            };
+            case (#int64) {
+                let decoded = switch (LEB128.fromSignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                if (decoded > 0x7FFFFFFFFFFFFFFF or decoded < -0x8000000000000000) {
+                    return #err("Varint exceeds Int64 range: " # Int.toText(decoded));
+                };
+                #int64(Int64.fromInt(decoded));
+            };
+            case (#uint32) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                if (decoded > 0xFFFFFFFF) {
+                    return #err("Varint exceeds Uint32 range: " # Nat.toText(decoded));
+                };
+                #uint32(Nat32.fromNat(decoded));
+            };
+            case (#uint64) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                if (decoded > 0xFFFFFFFFFFFFFFFF) {
+                    return #err("Varint exceeds Uint64 range: " # Nat.toText(decoded));
+                };
+                #uint64(Nat64.fromNat(decoded));
+            };
+            case (#bool) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                if (decoded > 1) {
+                    return #err("Varint for bool must be 0 or 1: " # Nat.toText(decoded));
+                };
+                #bool(decoded == 1);
+            };
+            case (#enum) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                #enum(decoded);
+            };
+            case (_) return #err("Invalid schema type for varint wire type: " # debug_show (valueType));
+        };
+        #ok(trueValue);
+    };
+
+    private func getFixed32Value(
+        value : [Nat8],
+        valueType : Types.ValueType,
+    ) : Result.Result<Fixed32Value, Text> {
+        if (value.size() != 4) {
+            Runtime.trap("Fixed32 value must be exactly 4 bytes: " # Nat.toText(value.size()));
+        };
+
+        let trueValue : Fixed32Value = switch (valueType) {
+            case (#int32) {
+                let ?decoded = IntX.decodeInt32(value.vals(), #lsb) else return #err("Invalid fixed32 value for int32");
+                #int32(decoded);
+            };
+            case (#uint32) {
+                let ?decoded = NatX.decodeNat32(value.vals(), #lsb) else return #err("Invalid fixed32 value for uint32");
+                #uint32(decoded);
+            };
+            case (#bool) {
+                if (value.size() != 1) {
+                    return #err("Fixed32 value for bool must be exactly 1 byte");
+                };
+                let decoded = value[0];
+                if (decoded > 1) {
+                    return #err("Fixed32 value for bool must be 0 or 1: " # Nat8.toText(decoded));
+                };
+                #bool(decoded == 1);
+            };
+            case (#enum) {
+                let ?decoded = IntX.decodeInt32(value.vals(), #lsb) else return #err("Invalid fixed32 value for enum");
+                #enum(Int32.toInt(decoded));
+            };
+            case (_) return #err("Invalid schema type for fixed32 wire type: " # debug_show (valueType));
+        };
+        #ok(trueValue);
+    };
+
+    private func getFixed64Value(
+        value : [Nat8],
+        valueType : Types.ValueType,
+    ) : Result.Result<Fixed64Value, Text> {
+        if (value.size() != 8) {
+            Runtime.trap("Fixed64 value must be exactly 8 bytes: " # Nat.toText(value.size()));
+        };
+
+        let trueValue : Fixed64Value = switch (valueType) {
+            case (#int64) {
+                let ?decoded = IntX.decodeInt64(value.vals(), #lsb) else return #err("Invalid fixed64 value for int64");
+                #int64(decoded);
+            };
+            case (#uint64) {
+                let ?decoded = NatX.decodeNat64(value.vals(), #lsb) else return #err("Invalid fixed64 value for uint64");
+                #uint64(decoded);
+            };
+            case (#bool) {
+                if (value.size() != 1) {
+                    return #err("Fixed64 value for bool must be exactly 1 byte");
+                };
+                let decoded = value[0];
+                if (decoded > 1) {
+                    return #err("Fixed64 value for bool must be 0 or 1: " # Nat8.toText(decoded));
+                };
+                #bool(decoded == 1);
+            };
+            case (#enum) {
+                let ?decoded = IntX.decodeInt64(value.vals(), #lsb) else return #err("Invalid fixed64 value for enum");
+                #enum(Int64.toInt(decoded));
+            };
+            case (_) return #err("Invalid schema type for fixed64 wire type: " # debug_show (valueType));
+        };
+        #ok(trueValue);
+    };
+
+    private func getLengthDelimitedValue(
+        value : [Nat8],
+        valueType : Types.ValueType,
+    ) : Result.Result<LengthDelimitedValue, Text> {
+        let trueValue : LengthDelimitedValue = switch (valueType) {
+            case (#string) {
+                let ?string = Text.decodeUtf8(Blob.fromArray(value)) else return #err("Invalid UTF-8 string in length-delimited value");
+                #string(string);
+            };
+            case (#bytes) #bytes(value);
+            case (#message(message)) return fromBytes(value.vals(), message);
+            case (#repeated(repeatedType)) {
+                let iter = PeekableIter.fromIter(value.vals());
+                let repeatedValues = List.empty<Value>();
+                getValueWithType(repeatedType.wireType, value, repeatedType.valueType);
+                #packedRepeated(List.toArray(repeatedValues));
+            };
+            case (#map(mapType)) switch (getMapEntry(value, mapType)) {
+                case (#err(e)) return #err("Error decoding map entry: " # e);
+                case (#ok((key, val))) #mapEntry((key, val));
+            };
+            case (_) return #err("Invalid schema type for length-delimited wire type: " # debug_show (valueType));
+        };
+        #ok(trueValue);
+    };
+
+    private func getMapEntry(
+        value : [Nat8],
+        (keyType, valueType) : (Types.ValueType, Types.ValueType),
+    ) : Result.Result<(Value, Value), Text> {
+
+        let decoder = SchemalessProtobufDecoder(value.vals());
+        let fields = switch (decoder.decode()) {
+            case (#err(e)) return #err("Error decoding map entry: " # e);
+            case (#ok(fields)) fields;
+        };
+        if (fields.size() != 2) {
+            return #err("Map entry must have exactly 2 fields, got: " # Nat.toText(fields.size()));
+        };
+
+        let keyField = fields[0];
+        let valueField = fields[1];
+        // Decode key
+        let key = switch (getValueWithType(keyField.wireType, keyField.value, keyType)) {
+            case (#err(e)) return #err("Error decoding map key: " # e);
+            case (#ok(v)) v;
+        };
+
+        // Decode value
+        let val = switch (getValueWithType(valueField.wireType, valueField.value, valueType)) {
+            case (#err(e)) return #err("Error decoding map value: " # e);
+            case (#ok(v)) v;
+        };
+
+        #ok((key, val));
+    };
+
+    private class SchemalessProtobufDecoder(bytes : Iter.Iter<Nat8>) {
         let peekableIter = PeekableIter.fromIter(bytes);
 
-        public func decode() : Result.Result<Types.Message, Types.DecodingError> {
-            let fields = Buffer.Buffer<Types.Field>(0);
+        public func decode() : Result.Result<[Types.SchemalessField], Text> {
+            let fields = Buffer.Buffer<Types.SchemalessField>(5);
             while (PeekableIter.hasNext(peekableIter)) {
                 // Decode each field until we reach the end of the input
                 switch (decodeField()) {
@@ -90,19 +340,19 @@ module {
             #ok(Buffer.toArray(fields));
         };
 
-        private func decodeField() : Result.Result<Types.Field, Types.DecodingError> {
+        private func decodeField() : Result.Result<Types.SchemalessField, Text> {
             // Read and decode tag (field number + wire type)
             let tag = switch (LEB128.fromUnsignedBytes(peekableIter)) {
-                case (#err(e)) return #err(#invalidVarint);
+                case (#err(e)) return #err("Invalid varint: " # e);
                 case (#ok(v)) v;
             };
 
             let wireTypeNum = Nat8.fromNat(tag % 8);
-            let fieldNumber = Nat32.fromNat(tag / 8);
+            let fieldNumber = tag / 8;
 
             // Validate field number
             if (fieldNumber == 0 or fieldNumber > 536870911) {
-                return #err(#invalidFieldNumber);
+                return #err("Invalid field number (0 -> 2^29 - 1): " # Nat.toText(fieldNumber));
             };
 
             // Parse wire type
@@ -111,7 +361,7 @@ module {
                 case (1) #fixed64;
                 case (2) #lengthDelimited;
                 case (5) #fixed32;
-                case (wt) return #err(#invalidWireType(wt));
+                case (wt) return #err("Invalid wire type: " # Nat8.toText(wt));
             };
 
             // Decode value based on wire type
@@ -127,217 +377,49 @@ module {
             });
         };
 
-        private func decodeValue(wireType : Types.WireType) : Result.Result<Types.Value, Types.DecodingError> {
-            switch (wireType) {
+        private func decodeValue(wireType : Types.WireType) : Result.Result<[Nat8], Text> {
+            let length : Nat = switch (wireType) {
                 case (#varint) {
-                    switch (LEB128.fromUnsignedBytes(peekableIter)) {
-                        case (#err(e)) #err(#invalidVarint);
-                        case (#ok(v)) {
-                            // For varint, we need to infer the specific type
-                            // For now, default to uint64 - in practice, you'd need schema info
-                            #ok(#uint64(v));
+                    let leb128Bytes = List.empty<Nat8>();
+                    var complete = false;
+                    label f for (byte in peekableIter) {
+                        List.add(leb128Bytes, byte);
+                        if (byte < 128) {
+                            // Last byte of varint
+                            complete := true;
+                            break f;
                         };
                     };
-                };
-                case (#fixed32) {
-                    switch (decodeFixed32()) {
-                        case (#err(e)) #err(e);
-                        case (#ok(v)) {
-                            // Default to fixed32 - could also be sfixed32 or float
-                            #ok(#fixed32(v));
-                        };
+                    if (not complete) {
+                        return #err("Unexpected end of bytes while reading varint");
                     };
+                    return #ok(List.toArray(leb128Bytes));
                 };
-                case (#fixed64) {
-                    switch (decodeFixed64()) {
-                        case (#err(e)) #err(e);
-                        case (#ok(v)) {
-                            // Default to fixed64 - could also be sfixed64 or double
-                            #ok(#fixed64(v));
-                        };
-                    };
-                };
-                case (#lengthDelimited) {
-                    switch (decodeLengthDelimited()) {
-                        case (#err(e)) #err(e);
-                        case (#ok(bytes)) {
-                            // Try to decode as UTF-8 string first, fallback to bytes
-                            let blob = Blob.fromArray(bytes);
-                            switch (Text.decodeUtf8(blob)) {
-                                case (?text) #ok(#string(text));
-                                case (null) #ok(#bytes(bytes));
-                            };
-                        };
-                    };
+                case (#fixed32) 32;
+                case (#fixed64) 64;
+                case (#lengthDelimited) switch (LEB128.fromUnsignedBytes(peekableIter)) {
+                    case (#err(e)) return #err("Invalid  varint: " # e);
+                    case (#ok(len)) len;
                 };
             };
-        };
-
-        private func decodeFixed32() : Result.Result<Nat32, Types.DecodingError> {
-            let bytes = switch (readBytes(4)) {
-                case (null) return #err(#unexpectedEndOfBytes);
-                case (?b) b;
-            };
-
-            let b0 = Nat32.fromNat(Nat8.toNat(bytes[0]));
-            let b1 = Nat32.fromNat(Nat8.toNat(bytes[1]));
-            let b2 = Nat32.fromNat(Nat8.toNat(bytes[2]));
-            let b3 = Nat32.fromNat(Nat8.toNat(bytes[3]));
-
-            let result = b0 + (b1 << 8) + (b2 << 16) + (b3 << 24);
-            #ok(result);
-        };
-
-        private func decodeFixed64() : Result.Result<Nat64, Types.DecodingError> {
-            let bytes = switch (readBytes(8)) {
-                case (null) return #err(#unexpectedEndOfBytes);
-                case (?b) b;
-            };
-
-            var result : Nat64 = 0;
-            var shift : Nat = 0;
-            for (byte in Iter.fromArray(bytes)) {
-                result := result + (Nat64.fromNat(Nat8.toNat(byte)) << shift);
-                shift += 8;
-            };
-
-            #ok(result);
-        };
-
-        private func decodeLengthDelimited() : Result.Result<[Nat8], Types.DecodingError> {
-            let length = switch (decodeVarint()) {
-                case (#err(e)) return #err(e);
-                case (#ok(len)) {
-                    if (len > 0x7FFFFFFF) {
-                        return #err(#invalidLength);
-                    };
-                    Nat64.toNat(len);
-                };
-            };
-
-            switch (readBytes(length)) {
-                case (null) #err(#unexpectedEndOfBytes);
-                case (?bytes) #ok(bytes);
-            };
-        };
-
-        private func readByte() : ?Nat8 {
-            iterator.next();
-        };
-
-        private func readBytes(n : Nat) : ?[Nat8] {
-            if (n == 0) {
-                return ?[];
-            };
-
-            let buffer = Buffer.Buffer<Nat8>(n);
-            for (i in Iter.range(0, n - 1)) {
-                switch (readByte()) {
-                    case (null) return null;
-                    case (?byte) buffer.add(byte);
-                };
-            };
-
-            ?Buffer.toArray(buffer);
+            #ok(Iter.toArray(Iter.take(peekableIter, length)));
         };
     };
 
-    /// Decodes a varint-encoded signed 32-bit integer using zigzag decoding.
-    /// This function is useful when you know a field contains a sint32 value.
-    ///
-    /// Parameters:
-    /// * `encoded`: The zigzag-encoded value
-    ///
-    /// Returns:
-    /// * The decoded signed 32-bit integer
-    ///
-    /// Example:
-    /// ```motoko
-    /// let zigzagValue : Nat32 = 1; // Represents -1 in zigzag encoding
-    /// let decoded = zigzagDecode32(zigzagValue); // Returns -1
-    /// ```
-    public func zigzagDecode32(encoded : Nat32) : Int32 {
-        let n = Nat32.toNat(encoded);
-        if (n % 2 == 0) {
-            Int32.fromNat(n / 2);
+    private func zigzagDecode32(encoded : Nat32) : Int32 {
+        if (encoded % 2 == 0) {
+            Int32.fromNat32(encoded / 2);
         } else {
-            Int32.fromInt(-(n / 2) - 1);
+            -Int32.fromNat32(encoded / 2) - 1;
         };
     };
 
-    /// Decodes a varint-encoded signed 64-bit integer using zigzag decoding.
-    /// This function is useful when you know a field contains a sint64 value.
-    ///
-    /// Parameters:
-    /// * `encoded`: The zigzag-encoded value
-    ///
-    /// Returns:
-    /// * The decoded signed 64-bit integer
-    ///
-    /// Example:
-    /// ```motoko
-    /// let zigzagValue : Nat64 = 1; // Represents -1 in zigzag encoding
-    /// let decoded = zigzagDecode64(zigzagValue); // Returns -1
-    /// ```
-    public func zigzagDecode64(encoded : Nat64) : Int64 {
+    private func zigzagDecode64(encoded : Nat64) : Int64 {
         if (encoded % 2 == 0) {
             Int64.fromNat64(encoded / 2);
         } else {
-            Int64.fromInt(-(encoded / 2) - 1);
+            -Int64.fromNat64(encoded / 2) - 1;
         };
     };
 
-    /// Converts IEEE 754 32-bit representation to Float.
-    /// This function is useful when you know a fixed32 field contains a float value.
-    ///
-    /// Parameters:
-    /// * `bits`: The IEEE 754 32-bit representation
-    ///
-    /// Returns:
-    /// * The decoded floating-point number
-    ///
-    /// Example:
-    /// ```motoko
-    /// let bits : Nat32 = 0x3f800000; // IEEE 754 representation of 1.0
-    /// let decoded = bitsToFloat32(bits); // Returns 1.0
-    /// ```
-    public func bitsToFloat32(bits : Nat32) : Float {
-        // Simple implementation - in practice you'd want proper IEEE 754 conversion
-        // This is a placeholder that handles basic cases
-        if (bits == 0) return 0.0;
-        if (bits == 0x3f800000) return 1.0;
-        if (bits == 0xbf800000) return -1.0;
-
-        // For now, simple conversion (not fully IEEE 754 compliant)
-        let sign = if (bits >= 0x80000000) -1.0 else 1.0;
-        let unsigned = Nat32.toNat(bits % 0x80000000);
-        sign * Float.fromInt(unsigned);
-    };
-
-    /// Converts IEEE 754 64-bit representation to Float.
-    /// This function is useful when you know a fixed64 field contains a double value.
-    ///
-    /// Parameters:
-    /// * `bits`: The IEEE 754 64-bit representation
-    ///
-    /// Returns:
-    /// * The decoded floating-point number
-    ///
-    /// Example:
-    /// ```motoko
-    /// let bits : Nat64 = 0x3ff0000000000000; // IEEE 754 representation of 1.0
-    /// let decoded = bitsToFloat64(bits); // Returns 1.0
-    /// ```
-    public func bitsToFloat64(bits : Nat64) : Float {
-        // Simple implementation - in practice you'd want proper IEEE 754 conversion
-        // This is a placeholder that handles basic cases
-        if (bits == 0) return 0.0;
-        if (bits == 0x3ff0000000000000) return 1.0;
-        if (bits == 0xbff0000000000000) return -1.0;
-
-        // For now, simple conversion (not fully IEEE 754 compliant)
-        let sign = if (bits >= 0x8000000000000000) -1.0 else 1.0;
-        let unsigned = Nat64.toNat(bits % 0x8000000000000000);
-        sign * Float.fromInt(unsigned);
-    };
 };
