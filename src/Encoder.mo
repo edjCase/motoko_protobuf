@@ -163,8 +163,14 @@ module {
                 encodeTag(#lengthDelimited);
             };
             case (#repeated(values)) {
-                let isAllPrimitives = Iter.all(values.vals(), isPrimitiveValue);
-                if (isAllPrimitives) {
+                if (values.size() == 0) {
+                    // No values to encode, just return
+                    return #ok;
+                };
+                let ?repeatedValue = getValidRepeatedType(values) else return #err("All repeated values must be of the same type");
+
+                let isFixedSize = isFixedSizeType(repeatedValue);
+                if (isFixedSize) {
                     // Encode as packed
                     encodeTag(#lengthDelimited);
                     // TODO how to handle packed repeated fields
@@ -182,7 +188,61 @@ module {
         #ok;
     };
 
-    private func isPrimitiveValue(value : Types.Value) : Bool {
+    private func isSameValueType(value1 : Types.Value, value2 : Types.Value) : Bool {
+        switch ((value1, value2)) {
+            case (#int32(_), #int32(_)) return true;
+            case (#int64(_), #int64(_)) return true;
+            case (#uint32(_), #uint32(_)) return true;
+            case (#uint64(_), #uint64(_)) return true;
+            case (#sint32(_), #sint32(_)) return true;
+            case (#sint64(_), #sint64(_)) return true;
+            case (#bool(_), #bool(_)) return true;
+            case (#enum(_), #enum(_)) return true;
+            case (#fixed32(_), #fixed32(_)) return true;
+            case (#sfixed32(_), #sfixed32(_)) return true;
+            case (#fixed64(_), #fixed64(_)) return true;
+            case (#sfixed64(_), #sfixed64(_)) return true;
+            case (#float(_), #float(_)) return true;
+            case (#double(_), #double(_)) return true;
+            case (#string(_), #string(_)) return true;
+            case (#bytes(_), #bytes(_)) return true;
+            case (#message(m1), #message(m2)) {
+                if (m1.size() != m2.size()) return false;
+                for ((m1Item, m2Item) in Iter.zip(m1.vals(), m2.vals())) {
+                    if (m1Item.fieldNumber != m2Item.fieldNumber) return false;
+                    if (not isSameValueType(m1Item.value, m2Item.value)) return false;
+                };
+                true;
+            };
+            case (#map(m1), #map(m2)) {
+                if (m1.size() != m2.size()) return false;
+                for (((m1ItemKey, m1ItemValue), (m2ItemKey, m2ItemValue)) in Iter.zip(m1.vals(), m2.vals())) {
+                    if (not isSameValueType(m1ItemKey, m2ItemKey)) return false;
+                    if (not isSameValueType(m1ItemValue, m2ItemValue)) return false;
+                };
+                true;
+            };
+            case (#repeated(v1), #repeated(v2)) {
+                let ?value1 = getValidRepeatedType(v1) else return false;
+                let ?value2 = getValidRepeatedType(v2) else return false;
+                isSameValueType(value1, value2);
+            };
+            case (_, _) return false; // Different types
+        };
+    };
+
+    private func getValidRepeatedType(repeated : [Types.Value]) : ?Types.Value {
+        let firstValue = repeated[0];
+        // Check if all values are of the same type
+        for (value in Iter.drop(repeated.vals(), 1)) {
+            if (isSameValueType(firstValue, value)) {
+                return null;
+            };
+        };
+        ?firstValue;
+    };
+
+    private func isFixedSizeType(value : Types.Value) : Bool {
         switch (value) {
             case (#int32(_)) return true;
             case (#int64(_)) return true;
@@ -193,12 +253,11 @@ module {
             case (#bool(_)) return true;
             case (#fixed32(_)) return true;
             case (#sfixed32(_)) return true;
-            case (#float(_)) return true;
             case (#fixed64(_)) return true;
             case (#sfixed64(_)) return true;
+            case (#float(_)) return true;
             case (#double(_)) return true;
-            case (#string(_)) return true;
-            case (#bytes(_)) return true;
+            case (#enum(_)) return true;
             case (_) return false;
         };
     };

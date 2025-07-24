@@ -93,25 +93,30 @@ module {
     };
 
     type Fixed32Value = {
-        #int32 : Int32;
-        #uint32 : Nat32;
+        #fixed32 : Nat32;
+        #sfixed32 : Int32;
+        #float : Float;
         #bool : Bool;
         #enum : Int;
     };
 
     type Fixed64Value = {
-        #int64 : Int64;
-        #uint64 : Nat64;
+        #fixed64 : Nat64;
+        #sfixed64 : Int64;
+        #double : Float;
         #bool : Bool;
         #enum : Int;
     };
+
+    // Fixed-size or self-delimited values that can go into a packed repeated field.
+    type SelfContainedValue = VarintValue or Fixed32Value or Fixed64Value;
 
     type LengthDelimitedValue = {
         #string : Text;
         #bytes : [Nat8];
         #message : [Types.Field];
         #mapEntry : (Value, Value);
-        #packedRepeated : [Value];
+        #packedRepeated : [SelfContainedValue];
     };
 
     type Value = VarintValue or Fixed32Value or Fixed64Value or LengthDelimitedValue;
@@ -174,6 +179,28 @@ module {
                 };
                 #uint64(Nat64.fromNat(decoded));
             };
+            case (#sint32) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                let zigzagDecoded = zigzagDecode(decoded);
+                if (zigzagDecoded > 0x7FFFFFFF or zigzagDecoded < -0x80000000) {
+                    return #err("Varint exceeds SInt32 range: " # Int.toText(zigzagDecoded));
+                };
+                #sint32(Int32.fromInt(zigzagDecoded));
+            };
+            case (#sint64) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
+                    case (#err(e)) return #err("Invalid varint: " # e);
+                    case (#ok(v)) v;
+                };
+                let zigzagDecoded = zigzagDecode(decoded);
+                if (zigzagDecoded > 0x7FFFFFFFFFFFFFFF or zigzagDecoded < -0x8000000000000000) {
+                    return #err("Varint exceeds SInt64 range: " # Int.toText(zigzagDecoded));
+                };
+                #sint64(Int64.fromInt(zigzagDecoded));
+            };
             case (#bool) {
                 let decoded = switch (LEB128.fromUnsignedBytes(value.vals())) {
                     case (#err(e)) return #err("Invalid varint: " # e);
@@ -205,13 +232,14 @@ module {
         };
 
         let trueValue : Fixed32Value = switch (valueType) {
-            case (#int32) {
-                let ?decoded = IntX.decodeInt32(value.vals(), #lsb) else return #err("Invalid fixed32 value for int32");
-                #int32(decoded);
+            case (#fixed32) {
+                let ?decoded = NatX.decodeNat32(value.vals(), #lsb) else return #err("Invalid fixed32 value");
+                #fixed32(decoded);
             };
-            case (#uint32) {
-                let ?decoded = NatX.decodeNat32(value.vals(), #lsb) else return #err("Invalid fixed32 value for uint32");
-                #uint32(decoded);
+            case (#sfixed32) {
+                let ?decoded = NatX.decodeNat32(value.vals(), #lsb) else return #err("Invalid sfixed32 value");
+                let zigzagDecoded = zigzagDecode32(decoded);
+                #sfixed32(zigzagDecoded);
             };
             case (#bool) {
                 if (value.size() != 1) {
@@ -241,13 +269,14 @@ module {
         };
 
         let trueValue : Fixed64Value = switch (valueType) {
-            case (#int64) {
-                let ?decoded = IntX.decodeInt64(value.vals(), #lsb) else return #err("Invalid fixed64 value for int64");
-                #int64(decoded);
+            case (#fixed64) {
+                let ?decoded = NatX.decodeNat64(value.vals(), #lsb) else return #err("Invalid fixed64 value");
+                #fixed64(decoded);
             };
-            case (#uint64) {
-                let ?decoded = NatX.decodeNat64(value.vals(), #lsb) else return #err("Invalid fixed64 value for uint64");
-                #uint64(decoded);
+            case (#sfixed64) {
+                let ?decoded = NatX.decodeNat64(value.vals(), #lsb) else return #err("Invalid sfixed64 value");
+                let zigzagDecoded = zigzagDecode64(decoded);
+                #sfixed64(zigzagDecoded);
             };
             case (#bool) {
                 if (value.size() != 1) {
@@ -278,11 +307,16 @@ module {
                 #string(string);
             };
             case (#bytes) #bytes(value);
-            case (#message(message)) return fromBytes(value.vals(), message);
+            case (#message(message)) switch (fromBytes(value.vals(), message)) {
+                case (#err(e)) return #err("Error decoding message: " # e);
+                case (#ok(fields)) #message(fields);
+            };
             case (#repeated(repeatedType)) {
                 let iter = PeekableIter.fromIter(value.vals());
-                let repeatedValues = List.empty<Value>();
-                getValueWithType(repeatedType.wireType, value, repeatedType.valueType);
+                while (PeekableIter.hasNext(iter)) {
+                    let decodedValue =; // TODO
+                    List.add(repeatedValues, decodedValue);
+                };
                 #packedRepeated(List.toArray(repeatedValues));
             };
             case (#map(mapType)) switch (getMapEntry(value, mapType)) {
@@ -403,6 +437,14 @@ module {
                 };
             };
             #ok(Iter.toArray(Iter.take(peekableIter, length)));
+        };
+    };
+
+    private func zigzagDecode(encoded : Nat) : Int {
+        if (encoded % 2 == 0) {
+            encoded / 2;
+        } else {
+            -(encoded / 2) - 1;
         };
     };
 
