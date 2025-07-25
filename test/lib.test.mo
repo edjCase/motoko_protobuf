@@ -17,8 +17,8 @@ test(
   func() {
     type TestCase = {
       bytes : Blob;
-      expected : [Protobuf.Field];
       // schema : [Protobuf.FieldType];
+      expected : [Protobuf.Field];
     };
     let testCases : [TestCase] = [
       {
