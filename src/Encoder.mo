@@ -50,15 +50,7 @@ module {
         };
 
         func encodeTag(wireType : Types.WireType) {
-            let wireTypeNum = switch (wireType) {
-                case (#varint) 0;
-                case (#fixed32) 5;
-                case (#fixed64) 1;
-                case (#lengthDelimited) 2;
-            };
-            // Encode tag (field number << 3 | wire type)
-            let tag = field.fieldNumber * 8 + wireTypeNum;
-            LEB128.toUnsignedBytesBuffer(buffer, tag);
+            encodeTagStatic(buffer, field.fieldNumber, wireType);
         };
 
         // Encode value
@@ -70,11 +62,156 @@ module {
         #ok(buffer.size() - initialSize);
     };
 
+    private func encodeTagStatic(
+        buffer : Buffer.Buffer<Nat8>,
+        fieldNumber : Nat,
+        wireType : Types.WireType,
+    ) {
+        let wireTypeNum = switch (wireType) {
+            case (#varint) 0;
+            case (#fixed32) 5;
+            case (#fixed64) 1;
+            case (#lengthDelimited) 2;
+        };
+        // Encode tag (field number << 3 | wire type)
+        let tag = fieldNumber * 8 + wireTypeNum;
+        LEB128.toUnsignedBytesBuffer(buffer, tag);
+    };
+
     private func encodeValue(
         buffer : Buffer.Buffer<Nat8>,
         value : Types.Value,
         encodeTag : (Types.WireType) -> (),
     ) : Result.Result<(), Text> {
+        switch (value) {
+            case (#int32(v)) encodeSelfContainedValue(buffer, #int32(v), encodeTag);
+            case (#int64(v)) encodeSelfContainedValue(buffer, #int64(v), encodeTag);
+            case (#uint32(v)) encodeSelfContainedValue(buffer, #uint32(v), encodeTag);
+            case (#uint64(v)) encodeSelfContainedValue(buffer, #uint64(v), encodeTag);
+            case (#sint32(v)) encodeSelfContainedValue(buffer, #sint32(v), encodeTag);
+            case (#sint64(v)) encodeSelfContainedValue(buffer, #sint64(v), encodeTag);
+            case (#bool(v)) encodeSelfContainedValue(buffer, #bool(v), encodeTag);
+            case (#enum(v)) encodeSelfContainedValue(buffer, #enum(v), encodeTag);
+            case (#fixed32(v)) encodeSelfContainedValue(buffer, #fixed32(v), encodeTag);
+            case (#sfixed32(v)) encodeSelfContainedValue(buffer, #sfixed32(v), encodeTag);
+            case (#float(v)) encodeSelfContainedValue(buffer, #float(v), encodeTag);
+            case (#fixed64(v)) encodeSelfContainedValue(buffer, #fixed64(v), encodeTag);
+            case (#sfixed64(v)) encodeSelfContainedValue(buffer, #sfixed64(v), encodeTag);
+            case (#double(v)) encodeSelfContainedValue(buffer, #double(v), encodeTag);
+            case (#string(v)) {
+                encodeTag(#lengthDelimited);
+                let utf8Bytes = Text.encodeUtf8(v);
+                LEB128.toUnsignedBytesBuffer(buffer, utf8Bytes.size());
+                for (byte in utf8Bytes.vals()) {
+                    buffer.add(byte);
+                };
+            };
+            case (#bytes(v)) {
+                encodeTag(#lengthDelimited);
+                LEB128.toUnsignedBytesBuffer(buffer, v.size());
+                for (byte in Iter.fromArray(v)) {
+                    buffer.add(byte);
+                };
+            };
+            case (#message(v)) {
+                encodeTag(#lengthDelimited);
+                let encodeContent = func(delimitedBuffer : Buffer.Buffer<Nat8>) : Result.Result<(), Text> {
+                    switch (toBytesBuffer(delimitedBuffer, v)) {
+                        case (#err(e)) return #err(e);
+                        case (#ok(_)) #ok;
+                    };
+                };
+                switch (encodeLengthDelimited(buffer, encodeContent)) {
+                    case (#err(e)) return #err(e);
+                    case (#ok) ();
+                };
+            };
+            case (#map(m)) {
+                encodeTag(#lengthDelimited);
+                let encodeContent = func(delimitedBuffer : Buffer.Buffer<Nat8>) : Result.Result<(), Text> {
+                    let encodeTagFactory = func(fieldNumber : Nat) : (Types.WireType) -> () {
+                        func(wireType : Types.WireType) {
+                            encodeTagStatic(delimitedBuffer, fieldNumber, wireType);
+                        };
+                    };
+                    for ((key, value) in m.vals()) {
+                        // Encode key field (field number 1)
+                        switch (encodeValue(delimitedBuffer, key, encodeTagFactory(1))) {
+                            case (#err(e)) return #err("Error encoding map key: " # e);
+                            case (#ok) ();
+                        };
+
+                        // Encode value field (field number 2)
+                        switch (encodeValue(delimitedBuffer, value, encodeTagFactory(2))) {
+                            case (#err(e)) return #err("Error encoding map value: " # e);
+                            case (#ok) ();
+                        };
+                    };
+                    #ok;
+                };
+                switch (encodeLengthDelimited(buffer, encodeContent)) {
+                    case (#err(e)) return #err(e);
+                    case (#ok) ();
+                };
+            };
+            case (#repeated(values)) {
+                if (values.size() == 0) {
+                    // No values to encode, just return
+                    return #ok;
+                };
+                let ?repeatedValue = getValidRepeatedType(values) else return #err("All repeated values must be of the same type");
+
+                switch (getSelfContainedType(repeatedValue)) {
+                    case (?_) {
+                        // Encode as packed
+                        encodeTag(#lengthDelimited);
+                        let fakeEncodeTag = func(_ : Types.WireType) {}; // Packed values do not have tags
+                        let encodeContent = func(delimitedBuffer : Buffer.Buffer<Nat8>) : Result.Result<(), Text> {
+                            for (value in Iter.fromArray(values)) {
+                                let ?selfContainedValue = getSelfContainedType(value) else return #err("All repeated values must be of the same type");
+                                encodeSelfContainedValue(delimitedBuffer, selfContainedValue, fakeEncodeTag);
+                            };
+                            #ok;
+                        };
+                        switch (encodeLengthDelimited(buffer, encodeContent)) {
+                            case (#err(e)) return #err(e);
+                            case (#ok) ();
+                        };
+                    };
+                    case (null) {
+                        // Encode as unpacked
+                        for (value in Iter.fromArray(values)) {
+                            switch (encodeValue(buffer, value, encodeTag)) {
+                                case (#err(e)) return #err(e);
+                                case (#ok) ();
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        #ok;
+    };
+
+    private func encodeLengthDelimited(
+        buffer : Buffer.Buffer<Nat8>,
+        encodeContent : (Buffer.Buffer<Nat8>) -> Result.Result<(), Text>,
+    ) : Result.Result<(), Text> {
+        let delimitedBuffer = Buffer.Buffer<Nat8>(64);
+        switch (encodeContent(delimitedBuffer)) {
+            case (#err(e)) return #err(e);
+            case (#ok) ();
+        };
+        LEB128.toUnsignedBytesBuffer(buffer, delimitedBuffer.size());
+        buffer.append(delimitedBuffer);
+        #ok;
+    };
+
+    private func encodeSelfContainedValue(
+        buffer : Buffer.Buffer<Nat8>,
+        value : Types.SelfContainedValue,
+        encodeTag : (Types.WireType) -> (),
+    ) {
         switch (value) {
             case (#int32(v)) {
                 encodeTag(#varint);
@@ -136,56 +273,7 @@ module {
                 let floatX = FloatX.fromFloat(v, #f64);
                 FloatX.encode(buffer, floatX, #lsb);
             };
-            case (#string(v)) {
-                encodeTag(#lengthDelimited);
-                let utf8Bytes = Text.encodeUtf8(v);
-                LEB128.toUnsignedBytesBuffer(buffer, utf8Bytes.size());
-                for (byte in utf8Bytes.vals()) {
-                    buffer.add(byte);
-                };
-            };
-            case (#bytes(v)) {
-                encodeTag(#lengthDelimited);
-                LEB128.toUnsignedBytesBuffer(buffer, v.size());
-                for (byte in Iter.fromArray(v)) {
-                    buffer.add(byte);
-                };
-            };
-            case (#message(v)) {
-                encodeTag(#lengthDelimited);
-                switch (toBytesBuffer(buffer, v)) {
-                    case (#err(e)) return #err(e);
-                    case (#ok(_)) ();
-                };
-            };
-            case (#map(m)) {
-                // TODO
-                encodeTag(#lengthDelimited);
-            };
-            case (#repeated(values)) {
-                if (values.size() == 0) {
-                    // No values to encode, just return
-                    return #ok;
-                };
-                let ?repeatedValue = getValidRepeatedType(values) else return #err("All repeated values must be of the same type");
-
-                let isFixedSize = isFixedSizeType(repeatedValue);
-                if (isFixedSize) {
-                    // Encode as packed
-                    encodeTag(#lengthDelimited);
-                    // TODO how to handle packed repeated fields
-                } else {
-                    // Encode as unpacked
-                    for (value in Iter.fromArray(values)) {
-                        switch (encodeValue(buffer, value, encodeTag)) {
-                            case (#err(e)) return #err(e);
-                            case (#ok) ();
-                        };
-                    };
-                };
-            };
         };
-        #ok;
     };
 
     private func isSameValueType(value1 : Types.Value, value2 : Types.Value) : Bool {
@@ -235,30 +323,30 @@ module {
         let firstValue = repeated[0];
         // Check if all values are of the same type
         for (value in Iter.drop(repeated.vals(), 1)) {
-            if (isSameValueType(firstValue, value)) {
+            if (not isSameValueType(firstValue, value)) {
                 return null;
             };
         };
         ?firstValue;
     };
 
-    private func isFixedSizeType(value : Types.Value) : Bool {
+    private func getSelfContainedType(value : Types.Value) : ?Types.SelfContainedValue {
         switch (value) {
-            case (#int32(_)) return true;
-            case (#int64(_)) return true;
-            case (#uint32(_)) return true;
-            case (#uint64(_)) return true;
-            case (#sint32(_)) return true;
-            case (#sint64(_)) return true;
-            case (#bool(_)) return true;
-            case (#fixed32(_)) return true;
-            case (#sfixed32(_)) return true;
-            case (#fixed64(_)) return true;
-            case (#sfixed64(_)) return true;
-            case (#float(_)) return true;
-            case (#double(_)) return true;
-            case (#enum(_)) return true;
-            case (_) return false;
+            case (#int32(int32)) ?#int32(int32);
+            case (#int64(int64)) ?#int64(int64);
+            case (#uint32(uint32)) ?#uint32(uint32);
+            case (#uint64(uint64)) ?#uint64(uint64);
+            case (#sint32(sint32)) ?#sint32(sint32);
+            case (#sint64(sint64)) ?#sint64(sint64);
+            case (#bool(bool)) ?#bool(bool);
+            case (#enum(enumValue)) ?#enum(enumValue);
+            case (#fixed32(fixed32)) ?#fixed32(fixed32);
+            case (#sfixed32(sfixed32)) ?#sfixed32(sfixed32);
+            case (#fixed64(fixed64)) ?#fixed64(fixed64);
+            case (#sfixed64(sfixed64)) ?#sfixed64(sfixed64);
+            case (#float(floatValue)) ?#float(floatValue);
+            case (#double(doubleValue)) ?#double(doubleValue);
+            case (_) null;
         };
     };
 

@@ -8,9 +8,9 @@ module {
     /// Contains field number, wire type, and the actual value.
     public type Field = Types.Field;
 
-    /// Represents a schemaless field in a Protobuf message.
+    /// Represents a raw field in a Protobuf message.
     /// Contains field number, wire type, and raw byte value.
-    public type SchemalessField = Types.SchemalessField;
+    public type RawField = Types.RawField;
 
     /// Represents the wire type of a Protobuf field.
     /// Determines how the value is encoded on the wire.
@@ -24,5 +24,5 @@ module {
 
     public let toBytesBuffer = Encoder.toBytesBuffer;
 
-    public let fromSchemalessBytes = Decoder.fromSchemalessBytes;
+    public let fromRawBytes = Decoder.fromRawBytes;
 };

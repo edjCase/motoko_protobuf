@@ -56,15 +56,15 @@ test(
     ];
 
     for (testCase in testCases.vals()) {
-      let decodeResult = Protobuf.fromSchemalessBytes(testCase.bytes.vals());
-      let schemalessFields = trapOrReturn<[Protobuf.SchemalessField], Text>(decodeResult, func(e) { e });
+      let decodeResult = Protobuf.fromRawBytes(testCase.bytes.vals());
+      let rawFields = trapOrReturn<[Protobuf.RawField], Text>(decodeResult, func(e) { e });
 
-      // Convert schemaless fields to expected format for comparison (simplified test)
-      let actualCount = schemalessFields.size();
+      // Convert raw fields to expected format for comparison (simplified test)
+      let actualCount = rawFields.size();
       let expectedCount = testCase.expected.size();
 
       if (actualCount != expectedCount) {
-        Debug.trap("Invalid decoded message count.\nExpected: " # debug_show (testCase.expected) # "\nActual: " # debug_show (schemalessFields) # "\nBytes: " # debug_show (testCase.bytes));
+        Debug.trap("Invalid decoded message count.\nExpected: " # debug_show (testCase.expected) # "\nActual: " # debug_show (rawFields) # "\nBytes: " # debug_show (testCase.bytes));
       };
 
       let encodeResult = Protobuf.toBytes(testCase.expected);
@@ -82,7 +82,7 @@ test(
   "Error Handling",
   func() {
     // Test invalid wire type
-    let invalidWireType = Protobuf.fromSchemalessBytes(Blob.fromArray([0x0B : Nat8]).vals()); // Wire type 3 (start_group) not supported
+    let invalidWireType = Protobuf.fromRawBytes(Blob.fromArray([0x0B : Nat8]).vals()); // Wire type 3 (start_group) not supported
     switch (invalidWireType) {
       case (#err(errorText)) {
         // Expected some error message
@@ -94,7 +94,7 @@ test(
     };
 
     // Test unexpected end of bytes
-    let truncated = Protobuf.fromSchemalessBytes(Blob.fromArray([0x08 : Nat8]).vals()); // Tag without value
+    let truncated = Protobuf.fromRawBytes(Blob.fromArray([0x08 : Nat8]).vals()); // Tag without value
     switch (truncated) {
       case (#err(errorText)) {
         // Expected some error message
