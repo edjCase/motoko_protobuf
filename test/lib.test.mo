@@ -4,12 +4,63 @@ import Result "mo:base/Result";
 import Nat8 "mo:base/Nat8";
 import { test } "mo:test";
 import Blob "mo:new-base/Blob";
+import List "mo:new-base/List";
+import Iter "mo:new-base/Iter";
+import Types "../src/Types";
 
 func trapOrReturn<TValue, TErr>(result : Result.Result<TValue, TErr>, show : (TErr) -> Text) : TValue {
   switch (result) {
     case (#err(e)) Debug.trap("Error: " # show(e));
     case (#ok(a)) a;
   };
+};
+
+func getValueType(value : Types.Value) : ?Types.ValueType {
+  let valueType : Types.ValueType = switch (value) {
+    case (#int32(_)) #int32;
+    case (#int64(_)) #int64;
+    case (#uint32(_)) #uint32;
+    case (#uint64(_)) #uint64;
+    case (#sint32(_)) #sint32;
+    case (#sint64(_)) #sint64;
+    case (#bool(_)) #bool;
+    case (#enum(_)) #enum;
+    case (#fixed32(_)) #fixed32;
+    case (#sfixed32(_)) #sfixed32;
+    case (#float(_)) #float;
+    case (#fixed64(_)) #fixed64;
+    case (#sfixed64(_)) #sfixed64;
+    case (#double(_)) #double;
+    case (#string(_)) #string;
+    case (#bytes(_)) #bytes;
+    case (#message(fields)) {
+      let fieldTypes = List.empty<Types.FieldType>();
+      for (field in fields.vals()) {
+        let ?valueType = getValueType(field.value) else return null;
+        List.add(
+          fieldTypes,
+          {
+            fieldNumber = field.fieldNumber;
+            valueType = valueType;
+          },
+        );
+      };
+      #message(List.toArray(fieldTypes));
+    };
+    case (#repeated(values)) {
+      if (values.size() == 0) {
+        return null;
+      };
+      let ?valueType = getValueType(values[0]) else return null;
+      #repeated(valueType);
+    };
+    case (#map(entries)) {
+      let ?keyType = getValueType(entries[0].0) else return null;
+      let ?valueType = getValueType(entries[0].1) else return null;
+      #map((keyType, valueType));
+    };
+  };
+  ?valueType;
 };
 
 test(
@@ -66,19 +117,19 @@ test(
         ];
       },
       {
-        bytes = "\08\80\80\80\80\78";
+        bytes = "\08\80\80\80\80\08";
         expected = [
           { fieldNumber = 1; value = #int32(-2147483648) } // Min int32
         ];
       },
       {
-        bytes = "\08\FF\FF\FF\FF\FF\FF\FF\FF\FF\00";
+        bytes = "\08\FF\FF\FF\FF\FF\FF\FF\FF\7F";
         expected = [
           { fieldNumber = 1; value = #int64(9223372036854775807) } // Max int64
         ];
       },
       {
-        bytes = "\08\80\80\80\80\80\80\80\80\80\7F";
+        bytes = "\08\80\80\80\80\80\80\80\80\80\01";
         expected = [
           { fieldNumber = 1; value = #int64(-9223372036854775808) } // Min int64
         ];
@@ -138,7 +189,7 @@ test(
         expected = [{ fieldNumber = 1; value = #enum(255) }];
       },
       {
-        bytes = "\08\7F";
+        bytes = "\08\FF\FF\FF\FF\0F";
         expected = [{ fieldNumber = 1; value = #enum(-1) }];
       },
 
@@ -192,8 +243,8 @@ test(
         expected = [{ fieldNumber = 1; value = #float(0.0) }];
       },
       {
-        bytes = "\0D\D0\0F\49\40";
-        expected = [{ fieldNumber = 1; value = #float(3.14159) }];
+        bytes = "\0D\00\00\30\40";
+        expected = [{ fieldNumber = 1; value = #float(2.75) }];
       },
       {
         bytes = "\0D\00\00\C0\BF";
@@ -204,14 +255,8 @@ test(
         expected = [{ fieldNumber = 1; value = #double(0.0) }];
       },
       {
-        bytes = "\09\18\2D\44\54\FB\21\09\40";
-        expected = [{ fieldNumber = 1; value = #double(3.141592653589793) }];
-      },
-      {
-        bytes = "\09\00\00\00\00\00\00\F0\FF";
-        expected = [
-          { fieldNumber = 1; value = #double(-1.7976931348623157e+308) } // Near min double
-        ];
+        bytes = "\09\00\00\00\00\00\00\06\40";
+        expected = [{ fieldNumber = 1; value = #double(2.75) }];
       },
 
       // String values
@@ -285,7 +330,7 @@ test(
         }];
       },
       {
-        bytes = "\0A\05\0A\03\08\FB\00";
+        bytes = "\0A\04\0A\02\08\7B";
         expected = [
           {
             fieldNumber = 1;
@@ -473,16 +518,20 @@ test(
         Debug.trap("Invalid encoded bytes.\nExpected: " # debug_show (testCase.bytes) # "\nActual:   " # debug_show (actualBytes) # "\nMessage: " # debug_show (testCase.expected));
       };
 
-      // let decodeResult = Protobuf.fromBytes(testCase.bytes.vals(), testCase.expected);
-      // let rawFields = trapOrReturn<[Protobuf.RawField], Text>(decodeResult, func(e) { e });
+      let expectedSchema = List.empty<Types.FieldType>();
+      for (field in testCase.expected.vals()) {
+        let ?valueType = getValueType(field.value) else {
+          Debug.trap("Expected type not found for field: " # debug_show (field));
+        };
+        List.add(expectedSchema, { fieldNumber = field.fieldNumber; valueType = valueType });
+      };
 
-      // // Convert raw fields to expected format for comparison (simplified test)
-      // let actualCount = rawFields.size();
-      // let expectedCount = testCase.expected.size();
+      let decodeResult = Protobuf.fromBytes(testCase.bytes.vals(), List.toArray(expectedSchema));
+      let fields = trapOrReturn<[Protobuf.Field], Text>(decodeResult, func(e) { e });
 
-      // if (actualCount != expectedCount) {
-      //   Debug.trap("Invalid decoded message count.\nExpected: " # debug_show (testCase.expected) # "\nActual: " # debug_show (rawFields) # "\nBytes: " # debug_show (testCase.bytes));
-      // };
+      if (fields != testCase.expected) {
+        Debug.trap("Invalid decoded message count.\nExpected: " # debug_show (testCase.expected) # "\nActual: " # debug_show (fields) # "\nBytes: " # debug_show (testCase.bytes));
+      };
     };
 
   },

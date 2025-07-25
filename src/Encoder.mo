@@ -218,11 +218,13 @@ module {
         switch (value) {
             case (#int32(v)) {
                 encodeTag(#varint);
-                LEB128.toSignedBytesBuffer(buffer, Int32.toInt(v));
+                let nat32Value = Nat32.toNat(Nat32.fromIntWrap(Int32.toInt(v)));
+                LEB128.toUnsignedBytesBuffer(buffer, nat32Value);
             };
             case (#int64(v)) {
                 encodeTag(#varint);
-                LEB128.toSignedBytesBuffer(buffer, Int64.toInt(v));
+                let nat64Value = Nat64.toNat(Nat64.fromIntWrap(Int64.toInt(v)));
+                LEB128.toUnsignedBytesBuffer(buffer, nat64Value);
             };
             case (#uint32(v)) {
                 encodeTag(#varint);
@@ -248,7 +250,8 @@ module {
             };
             case (#enum(v)) {
                 encodeTag(#varint);
-                LEB128.toSignedBytesBuffer(buffer, v);
+                let nat32Value = Nat32.toNat(Nat32.fromIntWrap(Int32.toInt(v)));
+                LEB128.toUnsignedBytesBuffer(buffer, nat32Value);
             };
             case (#fixed32(v)) {
                 encodeTag(#fixed32);

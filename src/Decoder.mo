@@ -37,10 +37,11 @@ module {
         )
         |> Map.fromIter<Nat, Types.ValueType>(_, Nat.compare);
         let fieldMap = Map.empty<Nat, Types.Value>();
+        Debug.print("Decoding schema: " # debug_show (schema));
         for (field in rawFields.vals()) {
-            Debug.print("Decoding field: " # Nat.toText(field.fieldNumber) # " with wire type: " # debug_show (field.wireType));
+            Debug.print("Decoding field: " # Nat.toText(field.fieldNumber) # ", wire type: " # debug_show (field.wireType));
             let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema");
-            let value = switch (decodeRawValue(field.value, fieldSchema, field.wireType == #lengthDelimited)) {
+            let value = switch (decodeRawValue(field.value, fieldSchema)) {
                 case (#err(e)) return #err("Error decoding field " # Nat.toText(field.fieldNumber) # ": " # e);
                 case (#ok(v)) v;
             };
@@ -87,7 +88,6 @@ module {
     private func decodeRawValue(
         value : [Nat8],
         valueType : Types.ValueType,
-        isLengthDelimited : Bool,
     ) : Result.Result<Types.Value, Text> {
         switch (valueType) {
             case (#int32) getVarintValue(value.vals(), #int32);
@@ -108,12 +108,13 @@ module {
             case (#bytes) getLengthDelimitedValue(value, #bytes);
             case (#message(message)) getLengthDelimitedValue(value, #message(message));
             case (#repeated(repeatedType)) {
-                if (isLengthDelimited) {
+                let isPacked = ??;
+                if (isPacked) {
                     getLengthDelimitedValue(value, #repeated(repeatedType));
                 } else {
                     // Just a single repeated value
                     // Will get combined into repeated group later
-                    decodeRawValue(value, repeatedType, false);
+                    decodeRawValue(value, repeatedType);
                 };
             };
             case (#map(mapType)) getLengthDelimitedValue(value, #map(mapType));
@@ -126,24 +127,24 @@ module {
     ) : Result.Result<Types.VarintValue, Text> {
         let trueValue : Types.VarintValue = switch (valueType) {
             case (#int32) {
-                let decoded = switch (LEB128.fromSignedBytes(value)) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value)) {
                     case (#err(e)) return #err("Invalid varint: " # e);
                     case (#ok(v)) v;
                 };
-                if (decoded > 0x7FFFFFFF or decoded < -0x80000000) {
+                if (decoded > 0xFFFFFFFF) {
                     return #err("Varint exceeds Int32 range: " # Int.toText(decoded));
                 };
-                #int32(Int32.fromInt(decoded));
+                #int32(Int32.fromNat32(Nat32.fromNat(decoded)));
             };
             case (#int64) {
-                let decoded = switch (LEB128.fromSignedBytes(value)) {
+                let decoded = switch (LEB128.fromUnsignedBytes(value)) {
                     case (#err(e)) return #err("Invalid varint: " # e);
                     case (#ok(v)) v;
                 };
-                if (decoded > 0x7FFFFFFFFFFFFFFF or decoded < -0x8000000000000000) {
+                if (decoded > 0xFFFFFFFFFFFFFFFF) {
                     return #err("Varint exceeds Int64 range: " # Int.toText(decoded));
                 };
-                #int64(Int64.fromInt(decoded));
+                #int64(Int64.fromNat64(Nat64.fromNat(decoded)));
             };
             case (#uint32) {
                 let decoded = switch (LEB128.fromUnsignedBytes(value)) {
@@ -202,7 +203,10 @@ module {
                     case (#err(e)) return #err("Invalid varint: " # e);
                     case (#ok(v)) v;
                 };
-                #enum(decoded);
+                if (decoded > 0xFFFFFFFFFFFFFFFF) {
+                    return #err("Varint exceeds enum (nat32) range: " # Nat.toText(decoded));
+                };
+                #enum(Int32.fromNat32(Nat32.fromNat(decoded)));
             };
         };
         #ok(trueValue);
@@ -220,8 +224,8 @@ module {
             };
             case (#sfixed32) {
                 let ?decoded = NatX.decodeNat32(value, #lsb) else return #err("Invalid sfixed32 value");
-                let zigzagDecoded = zigzagDecode32(decoded);
-                #sfixed32(zigzagDecoded);
+                let intValue = Int32.fromIntWrap(Nat32.toNat(decoded));
+                #sfixed32(intValue);
             };
             case (#float) {
                 let ?decoded = FloatX.decode(value, #f32, #lsb) else return #err("Invalid float value");
@@ -243,8 +247,8 @@ module {
             };
             case (#sfixed64) {
                 let ?decoded = NatX.decodeNat64(value, #lsb) else return #err("Invalid sfixed64 value");
-                let zigzagDecoded = zigzagDecode64(decoded);
-                #sfixed64(zigzagDecoded);
+                let intValue = Int64.fromIntWrap(Nat64.toNat(decoded));
+                #sfixed64(intValue);
             };
             case (#double) {
                 let ?decoded = FloatX.decode(value, #f64, #lsb) else return #err("Invalid double value");
@@ -273,20 +277,20 @@ module {
                 let repeatedValues = List.empty<Types.SelfContainedValue>();
                 while (PeekableIter.hasNext(iter)) {
                     let decodedValueResult = switch (repeatedType) {
-                        case (#int32) getVarintValue(value.vals(), #int32);
-                        case (#int64) getVarintValue(value.vals(), #int64);
-                        case (#uint32) getVarintValue(value.vals(), #uint32);
-                        case (#uint64) getVarintValue(value.vals(), #uint64);
-                        case (#sint32) getVarintValue(value.vals(), #sint32);
-                        case (#sint64) getVarintValue(value.vals(), #sint64);
-                        case (#fixed32) getFixed32Value(value.vals(), #fixed32);
-                        case (#sfixed32) getFixed32Value(value.vals(), #sfixed32);
-                        case (#fixed64) getFixed64Value(value.vals(), #fixed64);
-                        case (#sfixed64) getFixed64Value(value.vals(), #sfixed64);
-                        case (#float) getFixed32Value(value.vals(), #float);
-                        case (#double) getFixed64Value(value.vals(), #double);
-                        case (#bool) getVarintValue(value.vals(), #bool);
-                        case (#enum) getVarintValue(value.vals(), #enum);
+                        case (#int32) getVarintValue(iter, #int32);
+                        case (#int64) getVarintValue(iter, #int64);
+                        case (#uint32) getVarintValue(iter, #uint32);
+                        case (#uint64) getVarintValue(iter, #uint64);
+                        case (#sint32) getVarintValue(iter, #sint32);
+                        case (#sint64) getVarintValue(iter, #sint64);
+                        case (#fixed32) getFixed32Value(iter, #fixed32);
+                        case (#sfixed32) getFixed32Value(iter, #sfixed32);
+                        case (#fixed64) getFixed64Value(iter, #fixed64);
+                        case (#sfixed64) getFixed64Value(iter, #sfixed64);
+                        case (#float) getFixed32Value(iter, #float);
+                        case (#double) getFixed64Value(iter, #double);
+                        case (#bool) getVarintValue(iter, #bool);
+                        case (#enum) getVarintValue(iter, #enum);
                         case (_) Runtime.trap("Unsupported repeated type in packed field: " # debug_show (repeatedType));
                     };
                     let decodedValue = switch (decodedValueResult) {
@@ -322,13 +326,13 @@ module {
         let keyField = fields[0];
         let valueField = fields[1];
         // Decode key
-        let key = switch (decodeRawValue(keyField.value, keyType, keyField.wireType == #lengthDelimited)) {
+        let key = switch (decodeRawValue(keyField.value, keyType)) {
             case (#err(e)) return #err("Error decoding map key: " # e);
             case (#ok(v)) v;
         };
 
         // Decode value
-        let val = switch (decodeRawValue(valueField.value, valueType, valueField.wireType == #lengthDelimited)) {
+        let val = switch (decodeRawValue(valueField.value, valueType)) {
             case (#err(e)) return #err("Error decoding map value: " # e);
             case (#ok(v)) v;
         };
@@ -422,22 +426,6 @@ module {
             encoded / 2;
         } else {
             -(encoded / 2) - 1;
-        };
-    };
-
-    private func zigzagDecode32(encoded : Nat32) : Int32 {
-        if (encoded % 2 == 0) {
-            Int32.fromNat32(encoded / 2);
-        } else {
-            -Int32.fromNat32(encoded / 2) - 1;
-        };
-    };
-
-    private func zigzagDecode64(encoded : Nat64) : Int64 {
-        if (encoded % 2 == 0) {
-            Int64.fromNat64(encoded / 2);
-        } else {
-            -Int64.fromNat64(encoded / 2) - 1;
         };
     };
 
