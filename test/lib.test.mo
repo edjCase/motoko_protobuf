@@ -15,54 +15,6 @@ func trapOrReturn<TValue, TErr>(result : Result.Result<TValue, TErr>, show : (TE
   };
 };
 
-func getValueType(value : Types.Value) : ?Types.ValueType {
-  let valueType : Types.ValueType = switch (value) {
-    case (#int32(_)) #int32;
-    case (#int64(_)) #int64;
-    case (#uint32(_)) #uint32;
-    case (#uint64(_)) #uint64;
-    case (#sint32(_)) #sint32;
-    case (#sint64(_)) #sint64;
-    case (#bool(_)) #bool;
-    case (#enum(_)) #enum;
-    case (#fixed32(_)) #fixed32;
-    case (#sfixed32(_)) #sfixed32;
-    case (#float(_)) #float;
-    case (#fixed64(_)) #fixed64;
-    case (#sfixed64(_)) #sfixed64;
-    case (#double(_)) #double;
-    case (#string(_)) #string;
-    case (#bytes(_)) #bytes;
-    case (#message(fields)) {
-      let fieldTypes = List.empty<Types.FieldType>();
-      for (field in fields.vals()) {
-        let ?valueType = getValueType(field.value) else return null;
-        List.add(
-          fieldTypes,
-          {
-            fieldNumber = field.fieldNumber;
-            valueType = valueType;
-          },
-        );
-      };
-      #message(List.toArray(fieldTypes));
-    };
-    case (#repeated(values)) {
-      if (values.size() == 0) {
-        return null;
-      };
-      let ?valueType = getValueType(values[0]) else return null;
-      #repeated(valueType);
-    };
-    case (#map(entries)) {
-      let ?keyType = getValueType(entries[0].0) else return null;
-      let ?valueType = getValueType(entries[0].1) else return null;
-      #map((keyType, valueType));
-    };
-  };
-  ?valueType;
-};
-
 test(
   "Encoding",
   func() {
@@ -518,15 +470,7 @@ test(
         Debug.trap("Invalid encoded bytes.\nExpected: " # debug_show (testCase.bytes) # "\nActual:   " # debug_show (actualBytes) # "\nMessage: " # debug_show (testCase.expected));
       };
 
-      let expectedSchema = List.empty<Types.FieldType>();
-      for (field in testCase.expected.vals()) {
-        let ?valueType = getValueType(field.value) else {
-          Debug.trap("Expected type not found for field: " # debug_show (field));
-        };
-        List.add(expectedSchema, { fieldNumber = field.fieldNumber; valueType = valueType });
-      };
-
-      let decodeResult = Protobuf.fromBytes(testCase.bytes.vals(), List.toArray(expectedSchema));
+      let decodeResult = Protobuf.fromBytes(testCase.bytes.vals(), testCase.schema);
       let fields = trapOrReturn<[Protobuf.Field], Text>(decodeResult, func(e) { e });
 
       if (fields != testCase.expected) {

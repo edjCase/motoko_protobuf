@@ -108,7 +108,16 @@ module {
             case (#bytes) getLengthDelimitedValue(value, #bytes);
             case (#message(message)) getLengthDelimitedValue(value, #message(message));
             case (#repeated(repeatedType)) {
-                let isPacked = ??;
+                // Check if this is packed based on wire format and value type
+                let isPacked = switch (repeatedType) {
+                    case (#int32 or #int64 or #uint32 or #uint64 or #sint32 or #sint64 or #bool or #enum or #fixed32 or #sfixed32 or #float or #fixed64 or #sfixed64 or #double) {
+                        // Primitive numeric types can be packed
+                        // We assume it's packed if we're getting it as length-delimited data
+                        true;
+                    };
+                    case (_) false; // strings/bytes/messages are never packed
+                };
+
                 if (isPacked) {
                     getLengthDelimitedValue(value, #repeated(repeatedType));
                 } else {
