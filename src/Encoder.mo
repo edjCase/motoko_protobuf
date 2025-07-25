@@ -8,6 +8,7 @@ import Nat "mo:new-base/Nat";
 import Result "mo:new-base/Result";
 import Text "mo:new-base/Text";
 import Iter "mo:new-base/Iter";
+import Int "mo:new-base/Int";
 import Types "./Types";
 import LEB128 "mo:leb128";
 import FloatX "mo:xtended-numbers/FloatX";
@@ -156,7 +157,9 @@ module {
             };
             case (#repeated(values)) {
                 if (values.size() == 0) {
-                    // No values to encode, just return
+                    // Encode as empty packed
+                    encodeTag(#lengthDelimited);
+                    LEB128.toUnsignedBytesBuffer(buffer, 0);
                     return #ok;
                 };
                 let ?repeatedValue = getValidRepeatedType(values) else return #err("All repeated values must be of the same type");
@@ -355,7 +358,7 @@ module {
         if (value >= 0) {
             Nat32.fromNat(Nat.fromInt(v) * 2);
         } else {
-            Int32.toNat32((Int32.abs(value) - 1) * 2 + 1);
+            Nat32.fromNat((Int.abs(v) - 1) * 2 + 1);
         };
     };
 
@@ -364,7 +367,7 @@ module {
         if (value >= 0) {
             Nat64.fromNat(Nat.fromInt(v) * 2);
         } else {
-            Int64.toNat64((Int64.abs(value) - 1) * 2 + 1);
+            Nat64.fromNat((Int.abs(v) - 1) * 2 + 1);
         };
     };
 };

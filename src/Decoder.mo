@@ -19,6 +19,7 @@ import NatX "mo:xtended-numbers/NatX";
 import FloatX "mo:xtended-numbers/FloatX";
 import Map "mo:new-base/Map";
 import Array "mo:new-base/Array";
+import Debug "mo:new-base/Debug";
 
 module {
 
@@ -37,6 +38,7 @@ module {
         |> Map.fromIter<Nat, Types.ValueType>(_, Nat.compare);
         let fieldMap = Map.empty<Nat, Types.Value>();
         for (field in rawFields.vals()) {
+            Debug.print("Decoding field: " # Nat.toText(field.fieldNumber) # " with wire type: " # debug_show (field.wireType));
             let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema");
             let value = switch (decodeRawValue(field.value, fieldSchema, field.wireType == #lengthDelimited)) {
                 case (#err(e)) return #err("Error decoding field " # Nat.toText(field.fieldNumber) # ": " # e);
