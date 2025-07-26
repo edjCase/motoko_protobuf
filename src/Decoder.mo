@@ -19,7 +19,6 @@ import NatX "mo:xtended-numbers/NatX";
 import FloatX "mo:xtended-numbers/FloatX";
 import Map "mo:new-base/Map";
 import Array "mo:new-base/Array";
-import Debug "mo:new-base/Debug";
 
 module {
 
@@ -37,9 +36,7 @@ module {
         )
         |> Map.fromIter<Nat, Types.ValueType>(_, Nat.compare);
         let fieldMap = Map.empty<Nat, Types.Value>();
-        Debug.print("Decoding schema: " # debug_show (schema));
         for (field in rawFields.vals()) {
-            Debug.print("Decoding field: " # Nat.toText(field.fieldNumber) # ", wire type: " # debug_show (field.wireType));
             let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema");
             let value = switch (decodeRawValue(field.value, fieldSchema)) {
                 case (#err(e)) return #err("Error decoding field " # Nat.toText(field.fieldNumber) # ": " # e);
@@ -310,9 +307,15 @@ module {
                 };
                 #repeated(List.toArray(repeatedValues));
             };
-            case (#map(mapType)) switch (getMapEntry(value, mapType)) {
-                case (#err(e)) return #err("Error decoding map entry: " # e);
-                case (#ok((key, val))) #map([(key, val)]);
+            case (#map(mapType)) {
+                if (value.size() == 0) {
+                    #map([]); // Empty map
+                } else {
+                    switch (getMapEntry(value, mapType)) {
+                        case (#err(e)) return #err("Error decoding map entry: " # e);
+                        case (#ok((key, val))) #map([(key, val)]);
+                    };
+                };
             };
         };
         #ok(trueValue);
@@ -370,7 +373,6 @@ module {
                 case (#err(e)) return #err("Invalid varint: " # e);
                 case (#ok(v)) v;
             };
-
             let wireTypeNum = Nat8.fromNat(tag % 8);
             let fieldNumber = tag / 8;
 
@@ -419,8 +421,8 @@ module {
                     };
                     return #ok(List.toArray(leb128Bytes));
                 };
-                case (#fixed32) 32;
-                case (#fixed64) 64;
+                case (#fixed32) 4;
+                case (#fixed64) 8;
                 case (#lengthDelimited) switch (LEB128.fromUnsignedBytes(peekableIter)) {
                     case (#err(e)) return #err("Invalid  varint: " # e);
                     case (#ok(len)) len;

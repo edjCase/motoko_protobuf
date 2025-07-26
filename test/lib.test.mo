@@ -4,9 +4,6 @@ import Result "mo:base/Result";
 import Nat8 "mo:base/Nat8";
 import { test } "mo:test";
 import Blob "mo:new-base/Blob";
-import List "mo:new-base/List";
-import Iter "mo:new-base/Iter";
-import Types "../src/Types";
 
 func trapOrReturn<TValue, TErr>(result : Result.Result<TValue, TErr>, show : (TErr) -> Text) : TValue {
   switch (result) {
@@ -20,12 +17,18 @@ test(
   func() {
     type TestCase = {
       bytes : Blob;
-      // schema : [Protobuf.FieldType];
+      schema : [Protobuf.FieldType];
       expected : [Protobuf.Field];
     };
     let testCases : [TestCase] = [
       {
         bytes = "\0A\04\74\65\73\74\12\02\FF\0F\18\02\22\02\02\04";
+        schema = [
+          { fieldNumber = 1; valueType = #string },
+          { fieldNumber = 2; valueType = #bytes },
+          { fieldNumber = 3; valueType = #uint64 },
+          { fieldNumber = 4; valueType = #bytes },
+        ];
         expected = [
           { fieldNumber = 1; value = #string("test") },
           {
@@ -44,6 +47,11 @@ test(
       },
       {
         bytes = "\08\2A\12\05\68\65\6C\6C\6F\25\78\56\34\12";
+        schema = [
+          { fieldNumber = 1; valueType = #uint64 },
+          { fieldNumber = 2; valueType = #string },
+          { fieldNumber = 4; valueType = #fixed32 },
+        ];
         expected = [
           { fieldNumber = 1; value = #uint64(42) },
           {
@@ -55,45 +63,53 @@ test(
       },
       {
         bytes = "";
+        schema = [];
         expected = [];
       },
       // Basic varint types
       {
         bytes = "\08\00";
+        schema = [{ fieldNumber = 1; valueType = #int32 }];
         expected = [{ fieldNumber = 1; value = #int32(0) }];
       },
       {
         bytes = "\08\FF\FF\FF\FF\07";
+        schema = [{ fieldNumber = 1; valueType = #int32 }];
         expected = [
           { fieldNumber = 1; value = #int32(2147483647) } // Max int32
         ];
       },
       {
         bytes = "\08\80\80\80\80\08";
+        schema = [{ fieldNumber = 1; valueType = #int32 }];
         expected = [
           { fieldNumber = 1; value = #int32(-2147483648) } // Min int32
         ];
       },
       {
         bytes = "\08\FF\FF\FF\FF\FF\FF\FF\FF\7F";
+        schema = [{ fieldNumber = 1; valueType = #int64 }];
         expected = [
           { fieldNumber = 1; value = #int64(9223372036854775807) } // Max int64
         ];
       },
       {
         bytes = "\08\80\80\80\80\80\80\80\80\80\01";
+        schema = [{ fieldNumber = 1; valueType = #int64 }];
         expected = [
           { fieldNumber = 1; value = #int64(-9223372036854775808) } // Min int64
         ];
       },
       {
         bytes = "\08\FF\FF\FF\FF\0F";
+        schema = [{ fieldNumber = 1; valueType = #uint32 }];
         expected = [
           { fieldNumber = 1; value = #uint32(4294967295) } // Max uint32
         ];
       },
       {
         bytes = "\08\FF\FF\FF\FF\FF\FF\FF\FF\FF\01";
+        schema = [{ fieldNumber = 1; valueType = #uint64 }];
         expected = [
           { fieldNumber = 1; value = #uint64(18446744073709551615) } // Max uint64
         ];
@@ -102,70 +118,85 @@ test(
       // Signed integers with zigzag encoding
       {
         bytes = "\08\00";
+        schema = [{ fieldNumber = 1; valueType = #sint32 }];
         expected = [{ fieldNumber = 1; value = #sint32(0) }];
       },
       {
         bytes = "\08\01";
+        schema = [{ fieldNumber = 1; valueType = #sint32 }];
         expected = [{ fieldNumber = 1; value = #sint32(-1) }];
       },
       {
         bytes = "\08\02";
+        schema = [{ fieldNumber = 1; valueType = #sint32 }];
         expected = [{ fieldNumber = 1; value = #sint32(1) }];
       },
       {
         bytes = "\08\01";
+        schema = [{ fieldNumber = 1; valueType = #sint64 }];
         expected = [{ fieldNumber = 1; value = #sint64(-1) }];
       },
       {
         bytes = "\08\FE\FF\FF\FF\0F";
+        schema = [{ fieldNumber = 1; valueType = #sint64 }];
         expected = [{ fieldNumber = 1; value = #sint64(2147483647) }];
       },
 
       // Boolean values
       {
         bytes = "\08\01";
+        schema = [{ fieldNumber = 1; valueType = #bool }];
         expected = [{ fieldNumber = 1; value = #bool(true) }];
       },
       {
         bytes = "\08\00";
+        schema = [{ fieldNumber = 1; valueType = #bool }];
         expected = [{ fieldNumber = 1; value = #bool(false) }];
       },
 
       // Enum values
       {
         bytes = "\08\00";
+        schema = [{ fieldNumber = 1; valueType = #enum }];
         expected = [{ fieldNumber = 1; value = #enum(0) }];
       },
       {
         bytes = "\08\FF\01";
+        schema = [{ fieldNumber = 1; valueType = #enum }];
         expected = [{ fieldNumber = 1; value = #enum(255) }];
       },
       {
         bytes = "\08\FF\FF\FF\FF\0F";
+        schema = [{ fieldNumber = 1; valueType = #enum }];
         expected = [{ fieldNumber = 1; value = #enum(-1) }];
       },
 
       // Fixed32 types
       {
         bytes = "\0D\00\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #fixed32 }];
         expected = [{ fieldNumber = 1; value = #fixed32(0) }];
       },
       {
         bytes = "\0D\FF\FF\FF\FF";
+        schema = [{ fieldNumber = 1; valueType = #fixed32 }];
         expected = [
           { fieldNumber = 1; value = #fixed32(4294967295) } // Max uint32
         ];
       },
       {
         bytes = "\0D\00\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #sfixed32 }];
         expected = [{ fieldNumber = 1; value = #sfixed32(0) }];
       },
       {
         bytes = "\0D\FF\FF\FF\FF";
+        schema = [{ fieldNumber = 1; valueType = #sfixed32 }];
         expected = [{ fieldNumber = 1; value = #sfixed32(-1) }];
       },
       {
         bytes = "\0D\FF\FF\FF\7F";
+        schema = [{ fieldNumber = 1; valueType = #sfixed32 }];
         expected = [
           { fieldNumber = 1; value = #sfixed32(2147483647) } // Max int32
         ];
@@ -174,16 +205,19 @@ test(
       // Fixed64 types
       {
         bytes = "\09\00\00\00\00\00\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #fixed64 }];
         expected = [{ fieldNumber = 1; value = #fixed64(0) }];
       },
       {
         bytes = "\09\FF\FF\FF\FF\FF\FF\FF\FF";
+        schema = [{ fieldNumber = 1; valueType = #fixed64 }];
         expected = [
           { fieldNumber = 1; value = #fixed64(18446744073709551615) } // Max uint64
         ];
       },
       {
         bytes = "\09\00\00\00\00\00\00\00\80";
+        schema = [{ fieldNumber = 1; valueType = #sfixed64 }];
         expected = [
           { fieldNumber = 1; value = #sfixed64(-9223372036854775808) } // Min int64
         ];
@@ -192,42 +226,51 @@ test(
       // Float and double
       {
         bytes = "\0D\00\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #float }];
         expected = [{ fieldNumber = 1; value = #float(0.0) }];
       },
       {
         bytes = "\0D\00\00\30\40";
+        schema = [{ fieldNumber = 1; valueType = #float }];
         expected = [{ fieldNumber = 1; value = #float(2.75) }];
       },
       {
         bytes = "\0D\00\00\C0\BF";
+        schema = [{ fieldNumber = 1; valueType = #float }];
         expected = [{ fieldNumber = 1; value = #float(-1.5) }];
       },
       {
         bytes = "\09\00\00\00\00\00\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #double }];
         expected = [{ fieldNumber = 1; value = #double(0.0) }];
       },
       {
         bytes = "\09\00\00\00\00\00\00\06\40";
+        schema = [{ fieldNumber = 1; valueType = #double }];
         expected = [{ fieldNumber = 1; value = #double(2.75) }];
       },
 
       // String values
       {
         bytes = "\0A\00";
+        schema = [{ fieldNumber = 1; valueType = #string }];
         expected = [
           { fieldNumber = 1; value = #string("") } // Empty string
         ];
       },
       {
         bytes = "\0A\0B\68\65\6C\6C\6F\20\77\6F\72\6C\64";
+        schema = [{ fieldNumber = 1; valueType = #string }];
         expected = [{ fieldNumber = 1; value = #string("hello world") }];
       },
       {
         bytes = "\0A\1A\75\6E\69\63\6F\64\65\3A\20\E4\BD\A0\E5\A5\BD\E4\B8\96\E7\95\8C\20\F0\9F\9A\80";
+        schema = [{ fieldNumber = 1; valueType = #string }];
         expected = [{ fieldNumber = 1; value = #string("unicode: 你好世界 🚀") }];
       },
       {
         bytes = "\0A\14\73\70\65\63\69\61\6C\20\63\68\61\72\73\3A\20\0A\0D\09\5C\22";
+        schema = [{ fieldNumber = 1; valueType = #string }];
         expected = [{
           fieldNumber = 1;
           value = #string("special chars: \n\r\t\\\"");
@@ -237,20 +280,24 @@ test(
       // Bytes values
       {
         bytes = "\0A\00";
+        schema = [{ fieldNumber = 1; valueType = #bytes }];
         expected = [
           { fieldNumber = 1; value = #bytes([]) } // Empty bytes
         ];
       },
       {
         bytes = "\0A\01\00";
+        schema = [{ fieldNumber = 1; valueType = #bytes }];
         expected = [{ fieldNumber = 1; value = #bytes([0x00]) }];
       },
       {
         bytes = "\0A\03\FF\FE\FD";
+        schema = [{ fieldNumber = 1; valueType = #bytes }];
         expected = [{ fieldNumber = 1; value = #bytes([0xFF, 0xFE, 0xFD]) }];
       },
       {
         bytes = "\0A\05\01\02\03\04\05";
+        schema = [{ fieldNumber = 1; valueType = #bytes }];
         expected = [{
           fieldNumber = 1;
           value = #bytes([0x01, 0x02, 0x03, 0x04, 0x05]);
@@ -260,12 +307,17 @@ test(
       // Nested messages
       {
         bytes = "\0A\00";
+        schema = [{ fieldNumber = 1; valueType = #message([]) }];
         expected = [
           { fieldNumber = 1; value = #message([]) } // Empty message
         ];
       },
       {
         bytes = "\0A\02\08\2A";
+        schema = [{
+          fieldNumber = 1;
+          valueType = #message([{ fieldNumber = 1; valueType = #int32 }]);
+        }];
         expected = [{
           fieldNumber = 1;
           value = #message([{ fieldNumber = 1; value = #int32(42) }]);
@@ -273,6 +325,13 @@ test(
       },
       {
         bytes = "\0A\0A\0A\06\6E\65\73\74\65\64\10\01";
+        schema = [{
+          fieldNumber = 1;
+          valueType = #message([
+            { fieldNumber = 1; valueType = #string },
+            { fieldNumber = 2; valueType = #bool },
+          ]);
+        }];
         expected = [{
           fieldNumber = 1;
           value = #message([
@@ -283,6 +342,13 @@ test(
       },
       {
         bytes = "\0A\04\0A\02\08\7B";
+        schema = [{
+          fieldNumber = 1;
+          valueType = #message([{
+            fieldNumber = 1;
+            valueType = #message([{ fieldNumber = 1; valueType = #int32 }]);
+          }]);
+        }];
         expected = [
           {
             fieldNumber = 1;
@@ -298,6 +364,7 @@ test(
 
       {
         bytes = "\0A\03\01\02\03";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#int32) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#int32(1), #int32(2), #int32(3)]);
@@ -305,6 +372,7 @@ test(
       },
       {
         bytes = "\0A\03\01\00\01";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#bool) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#bool(true), #bool(false), #bool(true)]);
@@ -312,6 +380,7 @@ test(
       },
       {
         bytes = "\0A\03\00\01\02";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#enum) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#enum(0), #enum(1), #enum(2)]);
@@ -319,6 +388,7 @@ test(
       },
       {
         bytes = "\0A\08\64\00\00\00\C8\00\00\00";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#fixed32) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#fixed32(100), #fixed32(200)]);
@@ -326,6 +396,7 @@ test(
       },
       {
         bytes = "\0A\18\9A\99\99\99\99\99\F1\3F\9A\99\99\99\99\99\01\40\66\66\66\66\66\66\0A\40";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#double) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#double(1.1), #double(2.2), #double(3.3)]);
@@ -335,6 +406,7 @@ test(
       // Repeated fields - non-packed (strings, bytes, messages)
       {
         bytes = "\0A\01\61\0A\01\62\0A\01\63";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#string) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#string("a"), #string("b"), #string("c")]);
@@ -342,6 +414,7 @@ test(
       },
       {
         bytes = "\0A\01\01\0A\01\02";
+        schema = [{ fieldNumber = 1; valueType = #repeated(#bytes) }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([#bytes([0x01]), #bytes([0x02])]);
@@ -349,6 +422,10 @@ test(
       },
       {
         bytes = "\0A\02\08\01\0A\02\08\02";
+        schema = [{
+          fieldNumber = 1;
+          valueType = #repeated(#message([{ fieldNumber = 1; valueType = #int32 }]));
+        }];
         expected = [{
           fieldNumber = 1;
           value = #repeated([
@@ -360,20 +437,16 @@ test(
 
       // Map fields
       {
-        bytes = "\0A\00";
-        expected = [
-          { fieldNumber = 1; value = #map([]) } // Empty map
-        ];
-      },
-      {
-        bytes = "\0A\09\0A\04\6B\65\79\31\10\E4\00";
+        bytes = "\0A\08\0A\04\6B\65\79\31\10\64";
+        schema = [{ fieldNumber = 1; valueType = #map((#string, #int32)) }];
         expected = [{
           fieldNumber = 1;
           value = #map([(#string("key1"), #int32(100))]);
         }];
       },
       {
-        bytes = "\0A\14\08\01\12\06\76\61\6C\75\65\31\08\02\12\06\76\61\6C\75\65\32";
+        bytes = "\0A\0A\08\01\12\06\76\61\6C\75\65\31\0A\0A\08\02\12\06\76\61\6C\75\65\32";
+        schema = [{ fieldNumber = 1; valueType = #map((#int32, #string)) }];
         expected = [{
           fieldNumber = 1;
           value = #map([
@@ -384,6 +457,10 @@ test(
       },
       {
         bytes = "\0A\0C\0A\06\6E\65\73\74\65\64\12\02\08\01";
+        schema = [{
+          fieldNumber = 1;
+          valueType = #map((#string, #message([{ fieldNumber = 1; valueType = #bool }])));
+        }];
         expected = [{
           fieldNumber = 1;
           value = #map([(#string("nested"), #message([{ fieldNumber = 1; value = #bool(true) }]))]);
@@ -393,6 +470,11 @@ test(
       // Multiple fields in one message
       {
         bytes = "\08\2A\12\04\74\65\73\74\18\01";
+        schema = [
+          { fieldNumber = 1; valueType = #int32 },
+          { fieldNumber = 2; valueType = #string },
+          { fieldNumber = 3; valueType = #bool },
+        ];
         expected = [
           { fieldNumber = 1; value = #int32(42) },
           { fieldNumber = 2; value = #string("test") },
@@ -401,6 +483,14 @@ test(
       },
       {
         bytes = "\0A\02\01\02\12\08\0A\03\6B\65\79\10\E7\07\1A\09\09\1F\85\EB\51\B8\1E\09\40";
+        schema = [
+          { fieldNumber = 1; valueType = #repeated(#int32) },
+          { fieldNumber = 2; valueType = #map((#string, #int32)) },
+          {
+            fieldNumber = 3;
+            valueType = #message([{ fieldNumber = 1; valueType = #double }]);
+          },
+        ];
         expected = [
           { fieldNumber = 1; value = #repeated([#int32(1), #int32(2)]) },
           { fieldNumber = 2; value = #map([(#string("key"), #int32(999))]) },
@@ -414,12 +504,14 @@ test(
       // Edge case: High field numbers
       {
         bytes = "\F8\FF\FF\FF\0F\2A";
+        schema = [{ fieldNumber = 536870911; valueType = #int32 }];
         expected = [
           { fieldNumber = 536870911; value = #int32(42) } // Max field number
         ];
       },
       {
         bytes = "\FA\FF\FF\3F\0A\68\69\67\68\20\66\69\65\6C\64";
+        schema = [{ fieldNumber = 16777215; valueType = #string }];
         expected = [
           { fieldNumber = 16777215; value = #string("high field") } // 2^24 - 1
         ];
@@ -430,7 +522,24 @@ test(
 
       // Complex combination
       {
-        bytes = "\08\56\10\FF\FF\FF\FF\FF\FF\FF\FF\FF\01\18\FF\FF\FF\FF\0F\21\FF\FF\FF\FF\FF\FF\FF\7F\2A\11\63\6F\6D\70\6C\65\78\20\74\65\73\74\20\F0\9F\8E\AF\32\04\DE\AD\BE\EF\3A\0C\00\00\80\3F\00\00\00\40\00\00\40\40\42\0E\08\01\12\03\6F\6E\65\08\02\12\03\74\77\6F\4A\05\08\00\10\FF\01";
+        bytes = "\08\D6\FF\FF\FF\0F\10\FF\FF\FF\FF\FF\FF\FF\FF\FF\01\18\FF\FF\FF\FF\0F\21\FF\FF\FF\FF\FF\FF\FF\7F\2A\11\63\6F\6D\70\6C\65\78\20\74\65\73\74\20\F0\9F\8E\AF\32\04\DE\AD\BE\EF\3A\0C\00\00\80\3F\00\00\00\40\00\00\40\40\42\07\08\01\12\03\6F\6E\65\42\07\08\02\12\03\74\77\6F\4A\05\08\00\10\FF\01";
+        schema = [
+          { fieldNumber = 1; valueType = #int32 },
+          { fieldNumber = 2; valueType = #uint64 },
+          { fieldNumber = 3; valueType = #sint32 },
+          { fieldNumber = 4; valueType = #fixed64 },
+          { fieldNumber = 5; valueType = #string },
+          { fieldNumber = 6; valueType = #bytes },
+          { fieldNumber = 7; valueType = #repeated(#float) },
+          { fieldNumber = 8; valueType = #map((#int32, #string)) },
+          {
+            fieldNumber = 9;
+            valueType = #message([
+              { fieldNumber = 1; valueType = #bool },
+              { fieldNumber = 2; valueType = #enum },
+            ]);
+          },
+        ];
         expected = [
           { fieldNumber = 1; value = #int32(-42) },
           { fieldNumber = 2; value = #uint64(18446744073709551615) },

@@ -128,14 +128,14 @@ module {
                 };
             };
             case (#map(m)) {
-                encodeTag(#lengthDelimited);
-                let encodeContent = func(delimitedBuffer : Buffer.Buffer<Nat8>) : Result.Result<(), Text> {
-                    let encodeTagFactory = func(fieldNumber : Nat) : (Types.WireType) -> () {
-                        func(wireType : Types.WireType) {
-                            encodeTagStatic(delimitedBuffer, fieldNumber, wireType);
+                for ((key, value) in m.vals()) {
+                    encodeTag(#lengthDelimited);
+                    let encodeContent = func(delimitedBuffer : Buffer.Buffer<Nat8>) : Result.Result<(), Text> {
+                        let encodeTagFactory = func(fieldNumber : Nat) : (Types.WireType) -> () {
+                            func(wireType : Types.WireType) {
+                                encodeTagStatic(delimitedBuffer, fieldNumber, wireType);
+                            };
                         };
-                    };
-                    for ((key, value) in m.vals()) {
                         // Encode key field (field number 1)
                         switch (encodeValue(delimitedBuffer, key, encodeTagFactory(1))) {
                             case (#err(e)) return #err("Error encoding map key: " # e);
@@ -147,12 +147,12 @@ module {
                             case (#err(e)) return #err("Error encoding map value: " # e);
                             case (#ok) ();
                         };
+                        #ok;
                     };
-                    #ok;
-                };
-                switch (encodeLengthDelimited(buffer, encodeContent)) {
-                    case (#err(e)) return #err(e);
-                    case (#ok) ();
+                    switch (encodeLengthDelimited(buffer, encodeContent)) {
+                        case (#err(e)) return #err(e);
+                        case (#ok) ();
+                    };
                 };
             };
             case (#repeated(values)) {
