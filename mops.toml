@@ -2,8 +2,8 @@
 name = "protobuf"
 version = "0.0.1"
 description = "A motoko library for encoding protobuf messages"
-repository = "https://github.com/edjcase/motoko-protobuf"
-keywords = [ "protobuf", "encode", "serialization" ]
+repository = "https://github.com/edjcase/motoko_protobuf"
+keywords = ["protobuf", "encode", "serialization"]
 license = "MIT"
 
 [dependencies]
