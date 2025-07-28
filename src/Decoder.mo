@@ -27,6 +27,18 @@ module {
       case (#err(e)) return #err(e);
       case (#ok(fields)) fields;
     };
+    fromRawFields(rawFields, schema);
+  };
+
+  public func fromRawBytes(bytes : Iter.Iter<Nat8>) : Result.Result<[Types.RawField], Text> {
+    let decoder = RawProtobufDecoder(bytes);
+    decoder.decode();
+  };
+
+  public func fromRawFields(
+    rawFields : [Types.RawField],
+    schema : [Types.FieldType],
+  ) : Result.Result<[Types.Field], Text> {
     let schemaMap = schema.vals()
     |> Iter.map<Types.FieldType, (Nat, Types.ValueType)>(
       _,
@@ -37,7 +49,7 @@ module {
     |> Map.fromIter<Nat, Types.ValueType>(_, Nat.compare);
     let fieldMap = Map.empty<Nat, Types.Value>();
     for (field in rawFields.vals()) {
-      let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema");
+      let ?fieldSchema = Map.get(schemaMap, Nat.compare, field.fieldNumber) else return #err("Field number " # Nat.toText(field.fieldNumber) # " not found in schema. Raw protobuf fields: " # debug_show (rawFields));
       let value = switch (decodeRawValue(field.value, fieldSchema)) {
         case (#err(e)) return #err("Error decoding field " # Nat.toText(field.fieldNumber) # ": " # e);
         case (#ok(v)) v;
@@ -79,11 +91,6 @@ module {
     )
     |> Iter.toArray(_);
     #ok(fields);
-  };
-
-  public func fromRawBytes(bytes : Iter.Iter<Nat8>) : Result.Result<[Types.RawField], Text> {
-    let decoder = RawProtobufDecoder(bytes);
-    decoder.decode();
   };
 
   private func decodeRawValue(

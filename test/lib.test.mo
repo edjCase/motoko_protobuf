@@ -862,13 +862,203 @@ test(
           { fieldNumber = 4; value = #sint64(2147483647) },
         ];
         outputBytes = null;
+      },
+      // Block from ICP ledger
+      // Canister id : qhbym-qaaaa-aaaaa-aaafq-cai
+      // Chain length : 26_399_232
+      {
+        bytes = "\0a\22\0a\20\ff\ca\0e\cf\5e\83\75\41\c7\ee\5b\e4\31\e4\33\ad\8e\97\2a\7f\37\1e\86\fb\e4\f8\ad\64\6c\7c\bc\ea\12\0a\08\d3\e5\91\b0\de\89\a4\be\16\1a\3d\12\2d\12\22\0a\20\74\ec\82\f5\e0\d8\05\2a\a1\1d\c7\48\24\9b\dd\0a\ec\29\d6\28\19\9e\ee\ef\ad\d0\13\8f\8b\1b\10\59\1a\07\08\ed\e0\d2\df\88\09\22\00\32\0a\08\d3\e5\91\b0\de\89\a4\be\16";
+        schema = [
+          // Field 1: Hash parent_hash
+          {
+            fieldNumber = 1;
+            valueType = #message([
+              { fieldNumber = 1; valueType = #bytes }, // Hash.hash
+            ]);
+          },
+          // Field 2: TimeStamp timestamp
+          {
+            fieldNumber = 2;
+            valueType = #message([
+              { fieldNumber = 1; valueType = #uint64 }, // TimeStamp.timestamp_nanos
+            ]);
+          },
+          // Field 3: Transaction transaction
+          {
+            fieldNumber = 3;
+            valueType = #message([
+              // Field 1: Burn burn (oneof transfer)
+              {
+                fieldNumber = 1;
+                valueType = #message([
+                  {
+                    fieldNumber = 1;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                    ]);
+                  }, // Burn.from
+                  {
+                    fieldNumber = 3;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                    ]);
+                  }, // Burn.amount
+                  {
+                    fieldNumber = 4;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                    ]);
+                  }, // Burn.spender
+                ]);
+              },
+              // Field 2: Mint mint (oneof transfer)
+              {
+                fieldNumber = 2;
+                valueType = #message([
+                  {
+                    fieldNumber = 2;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                    ]);
+                  }, // Mint.to
+                  {
+                    fieldNumber = 3;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                    ]);
+                  }, // Mint.amount
+                ]);
+              },
+              // Field 3: Send send (oneof transfer)
+              {
+                fieldNumber = 3;
+                valueType = #message([
+                  {
+                    fieldNumber = 1;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                    ]);
+                  }, // Send.from
+                  {
+                    fieldNumber = 2;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                    ]);
+                  }, // Send.to
+                  {
+                    fieldNumber = 3;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                    ]);
+                  }, // Send.amount
+                  {
+                    fieldNumber = 4;
+                    valueType = #message([
+                      { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                    ]);
+                  }, // Send.max_fee
+                  // Field 5: Approve approve (oneof extension)
+                  {
+                    fieldNumber = 5;
+                    valueType = #message([
+                      {
+                        fieldNumber = 1;
+                        valueType = #message([
+                          { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                        ]);
+                      }, // Approve.allowance
+                      {
+                        fieldNumber = 2;
+                        valueType = #message([
+                          { fieldNumber = 1; valueType = #uint64 }, // TimeStamp.timestamp_nanos
+                        ]);
+                      }, // Approve.expires_at
+                      {
+                        fieldNumber = 3;
+                        valueType = #message([
+                          { fieldNumber = 1; valueType = #uint64 }, // Tokens.e8s
+                        ]);
+                      }, // Approve.expected_allowance
+                    ]);
+                  },
+                  // Field 6: TransferFrom transfer_from (oneof extension)
+                  {
+                    fieldNumber = 6;
+                    valueType = #message([
+                      {
+                        fieldNumber = 1;
+                        valueType = #message([
+                          { fieldNumber = 1; valueType = #bytes }, // AccountIdentifier.hash
+                        ]);
+                      }, // TransferFrom.spender
+                    ]);
+                  },
+                ]);
+              },
+              // Field 4: Memo memo
+              {
+                fieldNumber = 4;
+                valueType = #message([
+                  { fieldNumber = 1; valueType = #uint64 }, // Memo.memo
+                ]);
+              },
+              // Field 5: BlockIndex created_at (obsolete)
+              {
+                fieldNumber = 5;
+                valueType = #message([
+                  { fieldNumber = 1; valueType = #uint64 }, // BlockIndex.height
+                ]);
+              },
+              // Field 6: TimeStamp created_at_time
+              {
+                fieldNumber = 6;
+                valueType = #message([
+                  { fieldNumber = 1; valueType = #uint64 }, // TimeStamp.timestamp_nanos
+                ]);
+              },
+              // Field 7: Icrc1Memo icrc1_memo
+              {
+                fieldNumber = 7;
+                valueType = #message([
+                  { fieldNumber = 1; valueType = #bytes }, // Icrc1Memo.memo
+                ]);
+              },
+            ]);
+          },
+        ];
+        expected = [
+          {
+            fieldNumber = 1;
+            value = #message([{
+              fieldNumber = 1;
+              value = #bytes([255, 202, 14, 207, 94, 131, 117, 65, 199, 238, 91, 228, 49, 228, 51, 173, 142, 151, 42, 127, 55, 30, 134, 251, 228, 248, 173, 100, 108, 124, 188, 234]);
+            }]);
+          },
+          {
+            fieldNumber = 2;
+            value = #message([{
+              fieldNumber = 1;
+              value = #uint64(1_620_328_630_192_468_691);
+            }]);
+          },
+          {
+            fieldNumber = 3;
+            value = #message([{ fieldNumber = 2; value = #message([{ fieldNumber = 2; value = #message([{ fieldNumber = 1; value = #bytes([116, 236, 130, 245, 224, 216, 5, 42, 161, 29, 199, 72, 36, 155, 221, 10, 236, 41, 214, 40, 25, 158, 238, 239, 173, 208, 19, 143, 139, 27, 16, 89]) }]) }, { fieldNumber = 3; value = #message([{ fieldNumber = 1; value = #uint64(311_585_714_285) }]) }]) }, { fieldNumber = 4; value = #message([]) }, { fieldNumber = 6; value = #message([{ fieldNumber = 1; value = #uint64(1_620_328_630_192_468_691) }]) }]);
+          },
+        ];
+        outputBytes = null;
       }
 
     ];
 
     func test(testCase : TestCase) : Result.Result<(), Text> {
 
-      switch (Protobuf.fromBytes(testCase.bytes.vals(), testCase.schema)) {
+      let rawFields = switch (Protobuf.fromRawBytes(testCase.bytes.vals())) {
+        case (#err(e)) return #err("Decoding raw fields failed: " # e);
+        case (#ok(rawFields)) rawFields;
+      };
+
+      switch (Protobuf.fromRawFields(rawFields, testCase.schema)) {
         case (#err(e)) return #err("Decoding failed: " # e);
         case (#ok(decodedFields)) {
           if (decodedFields != testCase.expected) {

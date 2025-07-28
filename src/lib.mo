@@ -31,4 +31,6 @@ module {
   public let fromBytes = Decoder.fromBytes;
 
   public let fromRawBytes = Decoder.fromRawBytes;
+
+  public let fromRawFields = Decoder.fromRawFields;
 };
