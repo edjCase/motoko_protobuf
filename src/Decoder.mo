@@ -22,6 +22,29 @@ import Array "mo:new-base/Array";
 
 module {
 
+  /// Decodes protobuf binary data into typed fields using a schema.
+  ///
+  /// Takes a byte iterator containing protobuf binary data and a schema defining
+  /// the expected field types, then parses and validates the data according to
+  /// the schema to produce typed protobuf fields.
+  ///
+  /// # Parameters
+  /// - `bytes`: Iterator over the protobuf binary data bytes
+  /// - `schema`: Array of field type definitions for validation and typing
+  ///
+  /// # Returns
+  /// - `#ok([Types.Field])`: Successfully decoded and typed fields
+  /// - `#err(Text)`: Error message describing parsing or validation failure
+  ///
+  /// # Example
+  /// ```motoko
+  /// let schema = [{ fieldNumber = 1; valueType = #string }];
+  /// let bytes = [0x0A, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F].vals(); // "Hello"
+  /// switch (fromBytes(bytes, schema)) {
+  ///   case (#ok(fields)) { /* Successfully decoded fields */ };
+  ///   case (#err(error)) { /* Handle decoding error */ };
+  /// };
+  /// ```
   public func fromBytes(bytes : Iter.Iter<Nat8>, schema : [Types.FieldType]) : Result.Result<[Types.Field], Text> {
     let rawFields = switch (fromRawBytes(bytes)) {
       case (#err(e)) return #err(e);
@@ -30,11 +53,55 @@ module {
     fromRawFields(rawFields, schema);
   };
 
+  /// Decodes protobuf binary data into raw, untyped fields.
+  ///
+  /// Parses protobuf wire format data without applying any type schema,
+  /// returning raw field data with field numbers, wire types, and raw byte values.
+  /// This is useful for initial parsing or when working with unknown message types.
+  ///
+  /// # Parameters
+  /// - `bytes`: Iterator over the protobuf binary data bytes
+  ///
+  /// # Returns
+  /// - `#ok([Types.RawField])`: Successfully parsed raw fields
+  /// - `#err(Text)`: Error message describing parsing failure
+  ///
+  /// # Example
+  /// ```motoko
+  /// let bytes = [0x08, 0x96, 0x01].vals(); // varint field
+  /// switch (fromRawBytes(bytes)) {
+  ///   case (#ok(rawFields)) { /* Process raw field data */ };
+  ///   case (#err(error)) { /* Handle parsing error */ };
+  /// };
+  /// ```
   public func fromRawBytes(bytes : Iter.Iter<Nat8>) : Result.Result<[Types.RawField], Text> {
     let decoder = RawProtobufDecoder(bytes);
     decoder.decode();
   };
 
+  /// Converts raw protobuf fields into typed fields using a schema.
+  ///
+  /// Takes raw field data (typically from `fromRawBytes`) and applies type
+  /// information from a schema to create properly typed protobuf fields.
+  /// Handles field merging for repeated fields and validates field types.
+  ///
+  /// # Parameters
+  /// - `rawFields`: Array of raw field data with field numbers and byte values
+  /// - `schema`: Array of field type definitions for validation and typing
+  ///
+  /// # Returns
+  /// - `#ok([Types.Field])`: Successfully converted typed fields
+  /// - `#err(Text)`: Error message describing conversion or validation failure
+  ///
+  /// # Example
+  /// ```motoko
+  /// let rawFields = [{ fieldNumber = 1; wireType = #varint; value = [0x08] }];
+  /// let schema = [{ fieldNumber = 1; valueType = #bool }];
+  /// switch (fromRawFields(rawFields, schema)) {
+  ///   case (#ok(fields)) { /* Process typed fields */ };
+  ///   case (#err(error)) { /* Handle conversion error */ };
+  /// };
+  /// ```
   public func fromRawFields(
     rawFields : [Types.RawField],
     schema : [Types.FieldType],
@@ -93,6 +160,19 @@ module {
     #ok(fields);
   };
 
+  /// Decodes a raw value based on its expected type.
+  ///
+  /// Internal function that converts raw byte data into a properly typed value
+  /// according to the specified value type. Handles all protobuf data types
+  /// including primitives, strings, bytes, messages, repeated fields, and maps.
+  ///
+  /// # Parameters
+  /// - `value`: Raw byte array containing the field value
+  /// - `valueType`: Expected type for proper decoding and validation
+  ///
+  /// # Returns
+  /// - `#ok(Types.Value)`: Successfully decoded typed value
+  /// - `#err(Text)`: Error message describing decoding failure
   private func decodeRawValue(
     value : [Nat8],
     valueType : Types.ValueType,

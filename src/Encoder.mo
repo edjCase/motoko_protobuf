@@ -15,7 +15,37 @@ import FloatX "mo:xtended-numbers/FloatX";
 import NatX "mo:xtended-numbers/NatX";
 import IntX "mo:xtended-numbers/IntX";
 
+/// Protocol Buffer encoder module.
+///
+/// This module provides functionality to encode structured protobuf field data
+/// into binary format according to the protobuf wire format specification.
+/// Handles all protobuf data types, wire type encoding, and optimization features
+/// like packed repeated fields.
 module {
+  /// Encodes protobuf fields into a byte array.
+  ///
+  /// Takes an array of protobuf fields and serializes them into the standard
+  /// protobuf binary format. This is the main encoding function that converts
+  /// structured field data into a compact binary representation.
+  ///
+  /// # Parameters
+  /// - `message`: Array of protobuf fields to encode
+  ///
+  /// # Returns
+  /// - `#ok([Nat8])`: Successfully encoded byte array
+  /// - `#err(Text)`: Error message describing encoding failure
+  ///
+  /// # Example
+  /// ```motoko
+  /// let fields = [
+  ///   { fieldNumber = 1; value = #string("Hello") },
+  ///   { fieldNumber = 2; value = #int32(42) }
+  /// ];
+  /// switch (toBytes(fields)) {
+  ///   case (#ok(bytes)) { /* Successfully encoded bytes */ };
+  ///   case (#err(error)) { /* Handle encoding error */ };
+  /// };
+  /// ```
   public func toBytes(message : [Types.Field]) : Result.Result<[Nat8], Text> {
     let buffer = Buffer.Buffer<Nat8>(64);
     switch (toBytesBuffer(buffer, message)) {
@@ -24,6 +54,29 @@ module {
     };
   };
 
+  /// Encodes protobuf fields into a byte buffer.
+  ///
+  /// Similar to `toBytes` but writes the serialized data into a provided buffer,
+  /// allowing for more efficient memory management when building larger messages
+  /// or when you need to append to existing data.
+  ///
+  /// # Parameters
+  /// - `buffer`: Buffer to write the encoded bytes to
+  /// - `message`: Array of protobuf fields to encode
+  ///
+  /// # Returns
+  /// - `#ok(Nat)`: Number of bytes written to the buffer
+  /// - `#err(Text)`: Error message describing encoding failure
+  ///
+  /// # Example
+  /// ```motoko
+  /// let buffer = Buffer.Buffer<Nat8>(0);
+  /// let fields = [{ fieldNumber = 1; value = #string("Hello") }];
+  /// switch (toBytesBuffer(buffer, fields)) {
+  ///   case (#ok(bytesWritten)) { /* Successfully encoded */ };
+  ///   case (#err(error)) { /* Handle encoding error */ };
+  /// };
+  /// ```
   public func toBytesBuffer(
     buffer : Buffer.Buffer<Nat8>,
     message : [Types.Field],
