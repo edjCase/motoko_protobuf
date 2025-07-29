@@ -146,12 +146,13 @@ module {
         };
       };
     };
-    let fields = Map.entries(fieldMap)
-    |> Iter.map(
+    let fields = schema.vals()
+    |> Iter.filterMap(
       _,
-      func((fieldNumber, value) : (Nat, Types.Value)) : Types.Field {
-        {
-          fieldNumber = fieldNumber;
+      func(fieldType : Types.FieldType) : ?Types.Field {
+        let ?value = Map.get(fieldMap, Nat.compare, fieldType.fieldNumber) else return null;
+        ?{
+          fieldNumber = fieldType.fieldNumber;
           value = value;
         };
       },

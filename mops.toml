@@ -1,6 +1,6 @@
 [package]
 name = "protobuf"
-version = "0.0.2"
+version = "0.0.3"
 description = "A motoko library for encoding protobuf messages"
 repository = "https://github.com/edjcase/motoko_protobuf"
 keywords = ["protobuf", "encode", "serialization"]

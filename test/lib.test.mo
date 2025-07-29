@@ -1047,6 +1047,127 @@ test(
           },
         ];
         outputBytes = null;
+      },
+      {
+        bytes = "\12\2a\0a\22\12\20\58\22\d1\87\bd\40\b0\4c\c8\ae\74\37\88\8e\bf\84\4e\fa\c1\72\9e\09\8c\88\16\d5\85\d0\fc\c4\2b\5b\12\00\18\8e\80\01\12\2a\0a\22\12\20\0b\79\ba\de\e1\0d\c3\f7\78\1a\7a\9d\0f\02\0c\c0\f7\10\b3\28\c4\97\5c\2d\bc\30\a1\70\cd\18\8e\2c\12\00\18\8e\80\01\12\2a\0a\22\12\20\22\ad\63\1c\69\ee\98\30\95\b5\b8\ac\d0\29\ff\94\af\f1\dc\6c\48\83\78\78\58\9a\92\b9\0d\fe\a3\17\12\00\18\8e\80\01\12\2a\0a\22\12\20\df\7f\d0\8c\47\84\fe\69\38\c6\40\df\47\36\46\e4\f1\6c\7d\0c\65\67\ab\79\ec\69\81\76\7f\c3\f0\1a\12\00\18\8e\80\01\12\2a\0a\22\12\20\00\88\8c\81\5a\d7\d0\55\37\7b\db\7b\77\79\fc\97\40\e5\48\cb\5d\ac\90\c7\1b\9a\f9\f5\1a\87\9c\2d\12\00\18\8e\80\01\12\2a\0a\22\12\20\76\6d\b3\72\d0\15\c5\c7\00\f5\38\33\65\56\37\01\65\c8\89\33\47\91\48\7a\5e\48\d6\08\0f\1c\99\ea\12\00\18\8e\80\01\12\2a\0a\22\12\20\2f\53\30\04\ce\ed\74\27\9b\32\c5\8e\b0\e3\d2\a2\3b\c2\7b\a1\4a\b0\72\98\40\6c\42\ba\b8\d5\43\21\12\00\18\8e\80\01\12\2a\0a\22\12\20\4c\50\cf\de\fa\02\09\76\6f\88\59\19\ac\8f\fc\25\8e\92\53\c3\00\1a\c2\38\14\f8\75\d4\14\d3\94\73\12\00\18\8e\80\01\12\2a\0a\22\12\20\00\89\46\11\df\a1\92\85\30\20\cb\ba\de\1a\9a\0a\3f\35\9d\26\e0\d3\8c\af\4d\72\b9\b3\06\ff\5a\0b\12\00\18\8e\80\01\12\2a\0a\22\12\20\73\0d\db\a8\3e\31\47\bb\e1\07\80\b9\7f\f0\71\8c\74\c3\60\37\b9\7b\3b\79\b4\5c\45\11\80\65\45\81\12\00\18\8e\80\01\12\2a\0a\22\12\20\48\ea\9d\5d\42\3f\67\8d\83\d5\59\d2\34\9b\e8\32\55\27\29\0b\07\0c\90\fc\1a\cd\96\8f\0b\f7\0a\06\12\00\18\8e\80\01\0a\09\73\6f\6d\65\20\64\61\74\61";
+        schema = [
+          {
+            // Links
+            fieldNumber = 2;
+            valueType = #repeated(
+              #message([
+                /* Hash (required) */
+                { fieldNumber = 1; valueType = #bytes },
+                /* Name (optional) */
+                { fieldNumber = 2; valueType = #string },
+                /* Tsize (optional) */
+                { fieldNumber = 3; valueType = #uint64 },
+              ])
+            );
+          },
+          // Data
+          { fieldNumber = 1; valueType = #bytes },
+        ];
+        expected = [
+          {
+            fieldNumber = 2;
+            value = #repeated([
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\58\22\D1\87\BD\40\B0\4C\C8\AE\74\37\88\8E\BF\84\4E\FA\C1\72\9E\09\8C\88\16\D5\85\D0\FC\C4\2B\5B"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\0B\79\BA\DE\E1\0D\C3\F7\78\1A\7A\9D\0F\02\0C\C0\F7\10\B3\28\C4\97\5C\2D\BC\30\A1\70\CD\18\8E\2C"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\22\AD\63\1C\69\EE\98\30\95\B5\B8\AC\D0\29\FF\94\AF\F1\DC\6C\48\83\78\78\58\9A\92\B9\0D\FE\A3\17"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\DF\7F\D0\8C\47\84\FE\69\38\C6\40\DF\47\36\46\E4\F1\6C\7D\0C\65\67\AB\79\EC\69\81\76\7F\C3\F0\1A"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\00\88\8C\81\5A\D7\D0\55\37\7B\DB\7B\77\79\FC\97\40\E5\48\CB\5D\AC\90\C7\1B\9A\F9\F5\1A\87\9C\2D"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\76\6D\B3\72\D0\15\C5\C7\00\F5\38\33\65\56\37\01\65\C8\89\33\47\91\48\7A\5E\48\D6\08\0F\1C\99\EA"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\2F\53\30\04\CE\ED\74\27\9B\32\C5\8E\B0\E3\D2\A2\3B\C2\7B\A1\4A\B0\72\98\40\6C\42\BA\B8\D5\43\21"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\4C\50\CF\DE\FA\02\09\76\6F\88\59\19\AC\8F\FC\25\8E\92\53\C3\00\1A\C2\38\14\F8\75\D4\14\D3\94\73"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\00\89\46\11\DF\A1\92\85\30\20\CB\BA\DE\1A\9A\0A\3F\35\9D\26\E0\D3\8C\AF\4D\72\B9\B3\06\FF\5A\0B"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\73\0D\DB\A8\3E\31\47\BB\E1\07\80\B9\7F\F0\71\8C\74\C3\60\37\B9\7B\3B\79\B4\5C\45\11\80\65\45\81"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+              #message([
+                {
+                  fieldNumber = 1;
+                  value = #bytes(Blob.toArray("\12\20\48\EA\9D\5D\42\3F\67\8D\83\D5\59\D2\34\9B\E8\32\55\27\29\0B\07\0C\90\FC\1A\CD\96\8F\0B\F7\0A\06"));
+                },
+                { fieldNumber = 2; value = #string("") },
+                { fieldNumber = 3; value = #uint64(16_398) },
+              ]),
+            ]);
+          },
+          {
+            fieldNumber = 1;
+            value = #bytes([115, 111, 109, 101, 32, 100, 97, 116, 97]);
+          },
+        ];
+        outputBytes = null;
       }
 
     ];
