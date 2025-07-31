@@ -1,11 +1,11 @@
 import Protobuf "../src";
-import Debug "mo:base/Debug";
-import Result "mo:base/Result";
-import Nat8 "mo:base/Nat8";
+import Result "mo:core/Result";
+import Nat8 "mo:core/Nat8";
 import { test } "mo:test";
-import Blob "mo:new-base/Blob";
-import List "mo:new-base/List";
-import Text "mo:new-base/Text";
+import Blob "mo:core/Blob";
+import List "mo:core/List";
+import Text "mo:core/Text";
+import Runtime "mo:core/Runtime";
 
 test(
   "Encoding",
@@ -1213,7 +1213,7 @@ test(
       };
     };
     if (not List.isEmpty(failures)) {
-      Debug.trap("Some tests failed:\n" # Text.join("\n---\n", List.values(failures)));
+      Runtime.trap("Some tests failed:\n" # Text.join("\n---\n", List.values(failures)));
     };
 
   },
@@ -1228,10 +1228,10 @@ test(
       case (#err(errorText)) {
         // Expected some error message
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message");
+          Runtime.trap("Expected non-empty error message");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for invalid wire type, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for invalid wire type, got: " # debug_show (result));
     };
 
     // Test unexpected end of bytes
@@ -1240,10 +1240,10 @@ test(
       case (#err(errorText)) {
         // Expected some error message
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message");
+          Runtime.trap("Expected non-empty error message");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for truncated bytes, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for truncated bytes, got: " # debug_show (result));
     };
 
     // Test invalid field number (0)
@@ -1255,10 +1255,10 @@ test(
       case (#err(errorText)) {
         // Expected some error message
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message");
+          Runtime.trap("Expected non-empty error message");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for invalid field number, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for invalid field number, got: " # debug_show (result));
     };
 
     // Test invalid field number (too large)
@@ -1269,10 +1269,10 @@ test(
     switch (fieldNumberTooLarge) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for field number too large");
+          Runtime.trap("Expected non-empty error message for field number too large");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for field number too large, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for field number too large, got: " # debug_show (result));
     };
 
     // Test invalid UTF-8 in string decoding
@@ -1283,10 +1283,10 @@ test(
     switch (invalidUtf8) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for invalid UTF-8");
+          Runtime.trap("Expected non-empty error message for invalid UTF-8");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for invalid UTF-8, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for invalid UTF-8, got: " # debug_show (result));
     };
 
     // Test truncated length-delimited field
@@ -1296,10 +1296,10 @@ test(
     switch (truncatedLength) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for truncated length-delimited");
+          Runtime.trap("Expected non-empty error message for truncated length-delimited");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for truncated length-delimited, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for truncated length-delimited, got: " # debug_show (result));
     };
 
     // Test incomplete varint
@@ -1309,10 +1309,10 @@ test(
     switch (incompleteVarint) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for incomplete varint");
+          Runtime.trap("Expected non-empty error message for incomplete varint");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for incomplete varint, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for incomplete varint, got: " # debug_show (result));
     };
 
     // Test invalid bool value (> 1)
@@ -1323,10 +1323,10 @@ test(
     switch (invalidBool) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for invalid bool");
+          Runtime.trap("Expected non-empty error message for invalid bool");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for invalid bool, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for invalid bool, got: " # debug_show (result));
     };
 
     // Test varint overflow for uint32
@@ -1337,10 +1337,10 @@ test(
     switch (uint32Overflow) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for uint32 overflow");
+          Runtime.trap("Expected non-empty error message for uint32 overflow");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for uint32 overflow, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for uint32 overflow, got: " # debug_show (result));
     };
 
     // Test insufficient bytes for fixed32
@@ -1350,10 +1350,10 @@ test(
     switch (insufficientFixed32) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for insufficient fixed32 bytes");
+          Runtime.trap("Expected non-empty error message for insufficient fixed32 bytes");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for insufficient fixed32 bytes, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for insufficient fixed32 bytes, got: " # debug_show (result));
     };
 
     // Test insufficient bytes for fixed64
@@ -1363,10 +1363,10 @@ test(
     switch (insufficientFixed64) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for insufficient fixed64 bytes");
+          Runtime.trap("Expected non-empty error message for insufficient fixed64 bytes");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for insufficient fixed64 bytes, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for insufficient fixed64 bytes, got: " # debug_show (result));
     };
 
     // Test unknown field in schema
@@ -1377,10 +1377,10 @@ test(
     switch (unknownField) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for unknown field");
+          Runtime.trap("Expected non-empty error message for unknown field");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for unknown field, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for unknown field, got: " # debug_show (result));
     };
 
     // Test invalid map entry (wrong number of fields)
@@ -1391,10 +1391,10 @@ test(
     switch (invalidMapEntry) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for invalid map entry");
+          Runtime.trap("Expected non-empty error message for invalid map entry");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for invalid map entry, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for invalid map entry, got: " # debug_show (result));
     };
 
     // Test mixed types in repeated field (should fail validation)
@@ -1405,10 +1405,10 @@ test(
     switch (mixedRepeated) {
       case (#err(errorText)) {
         if (errorText.size() == 0) {
-          Debug.trap("Expected non-empty error message for mixed repeated types");
+          Runtime.trap("Expected non-empty error message for mixed repeated types");
         };
       };
-      case (#ok(result)) Debug.trap("Expected error for mixed repeated types, got: " # debug_show (result));
+      case (#ok(result)) Runtime.trap("Expected error for mixed repeated types, got: " # debug_show (result));
     };
   },
 );

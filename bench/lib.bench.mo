@@ -1,10 +1,8 @@
 import Bench "mo:bench";
-import Nat "mo:base/Nat";
-import Iter "mo:base/Iter";
-import Result "mo:base/Result";
-import Debug "mo:base/Debug";
-import Runtime "mo:new-base/Runtime";
-import Blob "mo:new-base/Blob";
+import Nat "mo:core/Nat";
+import Result "mo:core/Result";
+import Runtime "mo:core/Runtime";
+import Blob "mo:core/Blob";
 import Protobuf "../src";
 
 module {
@@ -221,7 +219,7 @@ module {
 
     bench.runner(
       func(row, col) {
-        let ?n = Nat.fromText(col) else Debug.trap("Cols must only contain numbers: " # col);
+        let ?n = Nat.fromText(col) else Runtime.trap("Cols must only contain numbers: " # col);
 
         // Define the operation to perform based on the row
         let operation = switch (row) {
@@ -247,10 +245,10 @@ module {
         };
 
         // Single shared loop with result checking
-        for (i in Iter.range(1, n)) {
+        for (i in Nat.range(1, n + 1)) {
           switch (operation(i)) {
             case (#ok(_)) ();
-            case (#err(e)) Debug.trap(e);
+            case (#err(e)) Runtime.trap(e);
           };
         };
       }

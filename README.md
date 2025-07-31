@@ -21,8 +21,8 @@ To set up MOPS package manager, follow the instructions from the [MOPS Site](htt
 
 ```motoko
 import Protobuf "mo:protobuf";
-import Result "mo:new-base/Result";
-import Debug "mo:base/Debug";
+import Result "mo:core/Result";
+import Debug "mo:core/Debug";
 
 // Create a simple message with multiple field types
 let fields = [
@@ -46,8 +46,8 @@ switch (Protobuf.toBytes(fields)) {
 
 ```motoko
 import Protobuf "mo:protobuf";
-import Result "mo:new-base/Result";
-import Debug "mo:base/Debug";
+import Result "mo:core/Result";
+import Debug "mo:core/Debug";
 
 // Define the expected message schema
 let schema = [
@@ -93,10 +93,11 @@ switch (Protobuf.fromRawBytes(bytes.vals())) {
 
 ```motoko
 import Protobuf "mo:protobuf";
-import Buffer "mo:base/Buffer";
+import Buffer "mo:buffer";
 
 // Use buffer for efficient encoding
-let buffer = Buffer.Buffer<Nat8>(100);
+let list = List.empty<Nat8>();
+let buffer = Buffer.fromList<Nat8>(list);
 let fields = [
   { fieldNumber = 1; value = #string("Efficient encoding") },
   { fieldNumber = 2; value = #uint64(9876543210) }

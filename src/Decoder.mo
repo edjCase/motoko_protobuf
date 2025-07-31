@@ -1,24 +1,23 @@
-import Buffer "mo:base/Buffer";
-import Int "mo:base/Int";
-import Int32 "mo:new-base/Int32";
-import Int64 "mo:new-base/Int64";
-import Nat8 "mo:new-base/Nat8";
-import Nat32 "mo:new-base/Nat32";
-import Nat64 "mo:new-base/Nat64";
-import Result "mo:new-base/Result";
-import Text "mo:new-base/Text";
-import Iter "mo:new-base/Iter";
+import Int "mo:core/Int";
+import Int32 "mo:core/Int32";
+import Int64 "mo:core/Int64";
+import Nat8 "mo:core/Nat8";
+import Nat32 "mo:core/Nat32";
+import Nat64 "mo:core/Nat64";
+import Result "mo:core/Result";
+import Text "mo:core/Text";
+import Iter "mo:core/Iter";
 import Types "./Types";
 import PeekableIter "mo:xtended-iter/PeekableIter";
 import LEB128 "mo:leb128";
-import Nat "mo:new-base/Nat";
-import List "mo:new-base/List";
-import Runtime "mo:new-base/Runtime";
-import Blob "mo:new-base/Blob";
+import Nat "mo:core/Nat";
+import List "mo:core/List";
+import Runtime "mo:core/Runtime";
+import Blob "mo:core/Blob";
 import NatX "mo:xtended-numbers/NatX";
 import FloatX "mo:xtended-numbers/FloatX";
-import Map "mo:new-base/Map";
-import Array "mo:new-base/Array";
+import Map "mo:core/Map";
+import Array "mo:core/Array";
 
 module {
 
@@ -448,15 +447,15 @@ module {
     let peekableIter = PeekableIter.fromIter(bytes);
 
     public func decode() : Result.Result<[Types.RawField], Text> {
-      let fields = Buffer.Buffer<Types.RawField>(5);
+      let fields = List.empty<Types.RawField>();
       while (PeekableIter.hasNext(peekableIter)) {
         // Decode each field until we reach the end of the input
         switch (decodeField()) {
           case (#err(e)) return #err(e);
-          case (#ok(field)) fields.add(field);
+          case (#ok(field)) List.add(fields, field);
         };
       };
-      #ok(Buffer.toArray(fields));
+      #ok(List.toArray(fields));
     };
 
     private func decodeField() : Result.Result<Types.RawField, Text> {

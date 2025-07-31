@@ -1,17 +1,17 @@
 [package]
 name = "protobuf"
-version = "0.0.3"
+version = "0.0.4"
 description = "A motoko library for encoding protobuf messages"
 repository = "https://github.com/edjcase/motoko_protobuf"
-keywords = ["protobuf", "encode", "serialization"]
+keywords = [ "protobuf", "encode", "serialization" ]
 license = "MIT"
 
 [dependencies]
-base = "0.15.0"
-new-base = "0.4.1"
 xtended-iter = "0.0.1"
-leb128 = "0.0.2"
-xtended-numbers = "0.6.0"
+leb128 = "1.0.0"
+xtended-numbers = "1.0.0"
+core = "0.6.0"
+buffer = "0.0.1"
 
 [dev-dependencies]
 test = "2.1.1"

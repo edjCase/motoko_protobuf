@@ -1,14 +1,15 @@
-import Buffer "mo:base/Buffer";
-import Int32 "mo:new-base/Int32";
-import Int64 "mo:new-base/Int64";
-import Nat8 "mo:new-base/Nat8";
-import Nat32 "mo:new-base/Nat32";
-import Nat64 "mo:new-base/Nat64";
-import Nat "mo:new-base/Nat";
-import Result "mo:new-base/Result";
-import Text "mo:new-base/Text";
-import Iter "mo:new-base/Iter";
-import Int "mo:new-base/Int";
+import Buffer "mo:buffer";
+import Int32 "mo:core/Int32";
+import Int64 "mo:core/Int64";
+import Nat8 "mo:core/Nat8";
+import Nat32 "mo:core/Nat32";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Result "mo:core/Result";
+import Text "mo:core/Text";
+import Iter "mo:core/Iter";
+import Int "mo:core/Int";
+import List "mo:core/List";
 import Types "./Types";
 import LEB128 "mo:leb128";
 import FloatX "mo:xtended-numbers/FloatX";
@@ -47,9 +48,9 @@ module {
   /// };
   /// ```
   public func toBytes(message : [Types.Field]) : Result.Result<[Nat8], Text> {
-    let buffer = Buffer.Buffer<Nat8>(64);
-    switch (toBytesBuffer(buffer, message)) {
-      case (#ok(_)) #ok(Buffer.toArray(buffer));
+    let list = List.empty<Nat8>();
+    switch (toBytesBuffer(Buffer.fromList<Nat8>(list), message)) {
+      case (#ok(_)) #ok(List.toArray(list));
       case (#err(e)) #err(e);
     };
   };
@@ -80,22 +81,20 @@ module {
   public func toBytesBuffer(
     buffer : Buffer.Buffer<Nat8>,
     message : [Types.Field],
-  ) : Result.Result<Nat, Text> {
-    let initialSize = buffer.size();
+  ) : Result.Result<(), Text> {
     for (field in Iter.fromArray(message)) {
       switch (fieldToBytesBuffer(buffer, field)) {
         case (#err(e)) return #err(e);
-        case (#ok(_)) {};
+        case (#ok) {};
       };
     };
-    #ok(buffer.size() - initialSize);
+    #ok;
   };
 
   private func fieldToBytesBuffer(
     buffer : Buffer.Buffer<Nat8>,
     field : Types.Field,
-  ) : Result.Result<Nat, Text> {
-    let initialSize = buffer.size();
+  ) : Result.Result<(), Text> {
 
     // Validate field number
     if (field.fieldNumber == 0 or field.fieldNumber > 536870911) {
@@ -113,7 +112,7 @@ module {
       case (#ok) {};
     };
 
-    #ok(buffer.size() - initialSize);
+    #ok;
   };
 
   private func encodeTagStatic(
@@ -157,14 +156,14 @@ module {
         let utf8Bytes = Text.encodeUtf8(v);
         LEB128.toUnsignedBytesBuffer(buffer, utf8Bytes.size());
         for (byte in utf8Bytes.vals()) {
-          buffer.add(byte);
+          buffer.write(byte);
         };
       };
       case (#bytes(v)) {
         encodeTag(#lengthDelimited);
         LEB128.toUnsignedBytesBuffer(buffer, v.size());
         for (byte in Iter.fromArray(v)) {
-          buffer.add(byte);
+          buffer.write(byte);
         };
       };
       case (#message(v)) {
@@ -257,13 +256,13 @@ module {
     buffer : Buffer.Buffer<Nat8>,
     encodeContent : (Buffer.Buffer<Nat8>) -> Result.Result<(), Text>,
   ) : Result.Result<(), Text> {
-    let delimitedBuffer = Buffer.Buffer<Nat8>(64);
-    switch (encodeContent(delimitedBuffer)) {
+    let delimitedList = List.empty<Nat8>();
+    switch (encodeContent(Buffer.fromList<Nat8>(delimitedList))) {
       case (#err(e)) return #err(e);
       case (#ok) ();
     };
-    LEB128.toUnsignedBytesBuffer(buffer, delimitedBuffer.size());
-    buffer.append(delimitedBuffer);
+    LEB128.toUnsignedBytesBuffer(buffer, List.size(delimitedList));
+    Buffer.writeMany(buffer, List.values(delimitedList));
     #ok;
   };
 
