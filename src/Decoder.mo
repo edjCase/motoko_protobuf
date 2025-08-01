@@ -316,16 +316,16 @@ module {
 
     let trueValue : Types.Fixed32Value = switch (valueType) {
       case (#fixed32) {
-        let ?decoded = NatX.decodeNat32(value, #lsb) else return #err("Invalid fixed32 value");
+        let ?decoded = NatX.fromNat32Bytes(value, #lsb) else return #err("Invalid fixed32 value");
         #fixed32(decoded);
       };
       case (#sfixed32) {
-        let ?decoded = NatX.decodeNat32(value, #lsb) else return #err("Invalid sfixed32 value");
+        let ?decoded = NatX.fromNat32Bytes(value, #lsb) else return #err("Invalid sfixed32 value");
         let intValue = Int32.fromIntWrap(Nat32.toNat(decoded));
         #sfixed32(intValue);
       };
       case (#float) {
-        let ?decoded = FloatX.decode(value, #f32, #lsb) else return #err("Invalid float value");
+        let ?decoded = FloatX.fromBytes(value, #f32, #lsb) else return #err("Invalid float value");
         #float(FloatX.toFloat(decoded));
       };
     };
@@ -339,16 +339,16 @@ module {
 
     let trueValue : Types.Fixed64Value = switch (valueType) {
       case (#fixed64) {
-        let ?decoded = NatX.decodeNat64(value, #lsb) else return #err("Invalid fixed64 value");
+        let ?decoded = NatX.fromNat64Bytes(value, #lsb) else return #err("Invalid fixed64 value");
         #fixed64(decoded);
       };
       case (#sfixed64) {
-        let ?decoded = NatX.decodeNat64(value, #lsb) else return #err("Invalid sfixed64 value");
+        let ?decoded = NatX.fromNat64Bytes(value, #lsb) else return #err("Invalid sfixed64 value");
         let intValue = Int64.fromIntWrap(Nat64.toNat(decoded));
         #sfixed64(intValue);
       };
       case (#double) {
-        let ?decoded = FloatX.decode(value, #f64, #lsb) else return #err("Invalid double value");
+        let ?decoded = FloatX.fromBytes(value, #f64, #lsb) else return #err("Invalid double value");
         #double(FloatX.toFloat(decoded));
       };
     };

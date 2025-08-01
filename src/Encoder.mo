@@ -311,29 +311,29 @@ module {
       };
       case (#fixed32(v)) {
         encodeTag(#fixed32);
-        NatX.encodeNat32(buffer, v, #lsb);
+        NatX.toNat32BytesBuffer(buffer, v, #lsb);
       };
       case (#sfixed32(v)) {
         encodeTag(#fixed32);
-        IntX.encodeInt32(buffer, v, #lsb);
+        IntX.toInt32BytesBuffer(buffer, v, #lsb);
       };
       case (#float(v)) {
         encodeTag(#fixed32);
         let floatX = FloatX.fromFloat(v, #f32);
-        FloatX.encode(buffer, floatX, #lsb);
+        FloatX.toBytesBuffer(buffer, floatX, #lsb);
       };
       case (#fixed64(v)) {
         encodeTag(#fixed64);
-        NatX.encodeNat64(buffer, v, #lsb);
+        NatX.toNat64BytesBuffer(buffer, v, #lsb);
       };
       case (#sfixed64(v)) {
         encodeTag(#fixed64);
-        IntX.encodeInt64(buffer, v, #lsb);
+        IntX.toInt64BytesBuffer(buffer, v, #lsb);
       };
       case (#double(v)) {
         encodeTag(#fixed64);
         let floatX = FloatX.fromFloat(v, #f64);
-        FloatX.encode(buffer, floatX, #lsb);
+        FloatX.toBytesBuffer(buffer, floatX, #lsb);
       };
     };
   };
