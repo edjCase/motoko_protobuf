@@ -1,20 +1,20 @@
-import Buffer "mo:buffer";
-import Int32 "mo:core/Int32";
-import Int64 "mo:core/Int64";
-import Nat8 "mo:core/Nat8";
-import Nat32 "mo:core/Nat32";
-import Nat64 "mo:core/Nat64";
-import Nat "mo:core/Nat";
-import Result "mo:core/Result";
-import Text "mo:core/Text";
-import Iter "mo:core/Iter";
-import Int "mo:core/Int";
-import List "mo:core/List";
+import Buffer "mo:buffer@0";
+import Int32 "mo:core@1/Int32";
+import Int64 "mo:core@1/Int64";
+import Nat8 "mo:core@1/Nat8";
+import Nat32 "mo:core@1/Nat32";
+import Nat64 "mo:core@1/Nat64";
+import Nat "mo:core@1/Nat";
+import Result "mo:core@1/Result";
+import Text "mo:core@1/Text";
+import Iter "mo:core@1/Iter";
+import Int "mo:core@1/Int";
+import List "mo:core@1/List";
 import Types "./Types";
-import LEB128 "mo:leb128";
-import FloatX "mo:xtended-numbers/FloatX";
-import NatX "mo:xtended-numbers/NatX";
-import IntX "mo:xtended-numbers/IntX";
+import LEB128 "mo:leb128@1";
+import FloatX "mo:xtended-numbers@2/FloatX";
+import NatX "mo:xtended-numbers@2/NatX";
+import IntX "mo:xtended-numbers@2/IntX";
 
 /// Protocol Buffer encoder module.
 ///

@@ -1,8 +1,8 @@
 import Bench "mo:bench";
-import Nat "mo:core/Nat";
-import Result "mo:core/Result";
-import Runtime "mo:core/Runtime";
-import Blob "mo:core/Blob";
+import Nat "mo:core@1/Nat";
+import Result "mo:core@1/Result";
+import Runtime "mo:core@1/Runtime";
+import Blob "mo:core@1/Blob";
 import Protobuf "../src";
 
 module {

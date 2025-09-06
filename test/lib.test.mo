@@ -1,11 +1,11 @@
 import Protobuf "../src";
-import Result "mo:core/Result";
-import Nat8 "mo:core/Nat8";
+import Result "mo:core@1/Result";
+import Nat8 "mo:core@1/Nat8";
 import { test } "mo:test";
-import Blob "mo:core/Blob";
-import List "mo:core/List";
-import Text "mo:core/Text";
-import Runtime "mo:core/Runtime";
+import Blob "mo:core@1/Blob";
+import List "mo:core@1/List";
+import Text "mo:core@1/Text";
+import Runtime "mo:core@1/Runtime";
 
 test(
   "Encoding",
